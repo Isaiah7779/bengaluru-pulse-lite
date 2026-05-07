@@ -5,30 +5,48 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import mean_absolute_error, r2_score
 import joblib
 
-# Load dataset
-df = pd.read_csv("traffic_dataset.csv")
+# LOAD FULL DATASET
+df = pd.read_csv("Banglore_traffic_Dataset.csv")
 
-# Show columns
-print(df.columns)
-
-# Remove missing values
+# REMOVE MISSING VALUES
 df = df.dropna()
 
-# Encode weather conditions
-weather_encoder = LabelEncoder()
-df['Weather Conditions'] = weather_encoder.fit_transform(df['Weather Conditions'])
+# ENCODERS
 
-# Features (inputs)
+area_encoder = LabelEncoder()
+road_encoder = LabelEncoder()
+weather_encoder = LabelEncoder()
+
+# ENCODE CATEGORICAL DATA
+
+df['Area Name'] = area_encoder.fit_transform(
+    df['Area Name']
+)
+
+df['Road/Intersection Name'] = road_encoder.fit_transform(
+    df['Road/Intersection Name']
+)
+
+df['Weather Conditions'] = weather_encoder.fit_transform(
+    df['Weather Conditions']
+)
+
+# FEATURES
+
 X = df[[
+    'Area Name',
+    'Road/Intersection Name',
     'Traffic Volume',
     'Average Speed',
     'Weather Conditions'
 ]]
 
-# Target (output)
+# TARGET
+
 y = df['Congestion Level']
 
-# Split dataset
+# SPLIT DATA
+
 X_train, X_test, y_train, y_test = train_test_split(
     X,
     y,
@@ -36,23 +54,29 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=42
 )
 
-# Train regression model
+# MODEL
+
 model = RandomForestRegressor()
 
 model.fit(X_train, y_train)
 
-# Predictions
+# PREDICTIONS
+
 predictions = model.predict(X_test)
 
-# Evaluation
+# METRICS
+
 mae = mean_absolute_error(y_test, predictions)
 r2 = r2_score(y_test, predictions)
 
 print(f"Mean Absolute Error: {mae}")
 print(f"R2 Score: {r2}")
 
-# Save model
+# SAVE EVERYTHING
+
 joblib.dump(model, "traffic_model.pkl")
+joblib.dump(area_encoder, "area_encoder.pkl")
+joblib.dump(road_encoder, "road_encoder.pkl")
 joblib.dump(weather_encoder, "weather_encoder.pkl")
 
-print("Regression model trained successfully!")
+print("Multi-location AI model trained successfully!")
