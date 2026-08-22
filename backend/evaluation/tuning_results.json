@@ -1,0 +1,33 @@
+{
+    "baseline_model": {
+        "algorithm": "RandomForestRegressor",
+        "parameters": {
+            "n_estimators": 200,
+            "random_state": 42
+        },
+        "mae": 4.411985675024754,
+        "rmse": 5.709903335613066,
+        "r2_score": 0.9479620872424999,
+        "explained_variance": 0.9480740793917749
+    },
+    "tuned_model": {
+        "algorithm": "RandomForestRegressor",
+        "best_parameters": {
+            "max_depth": null,
+            "max_features": 1.0,
+            "min_samples_leaf": 4,
+            "min_samples_split": 10,
+            "n_estimators": 100
+        },
+        "best_cross_validation_r2": 0.9437540637336652,
+        "mae": 4.043458784320095,
+        "rmse": 5.145084395349759,
+        "r2_score": 0.957747991111035,
+        "explained_variance": 0.9579064702816111
+    },
+    "improvement": {
+        "r2": 0.009785903868535173,
+        "mae": 0.3685268907046586,
+        "rmse": 0.564818940263307
+    }
+}

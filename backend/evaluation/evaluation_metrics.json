@@ -1,0 +1,12 @@
+{
+    "model": "RandomForestRegressor",
+    "dataset_records": 492,
+    "training_samples": 393,
+    "testing_samples": 99,
+    "test_size": 0.2,
+    "random_state": 42,
+    "mae": 2.037441,
+    "rmse": 2.749058,
+    "r2_score": 0.987938,
+    "explained_variance": 0.987997
+}

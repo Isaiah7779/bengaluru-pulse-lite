@@ -1,0 +1,17 @@
+{
+    "model": "Tuned Random Forest Regressor",
+    "dataset": "Bengaluru Traffic Dataset",
+    "dataset_records": 492,
+    "training_samples": 393,
+    "testing_samples": 99,
+    "test_size": 0.2,
+    "random_state": 42,
+    "mae": 4.043459,
+    "rmse": 5.145084,
+    "r2_score": 0.957748,
+    "explained_variance": 0.957906,
+    "mean_error": 0.315105,
+    "median_absolute_error": 3.47637,
+    "minimum_absolute_error": 0.0,
+    "maximum_absolute_error": 13.214992
+}

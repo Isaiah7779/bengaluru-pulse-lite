@@ -1,0 +1,7 @@
+backend terminal:
+cd backend
+python -m uvicorn main:app --reload
+
+frontend terminal:
+cd frontend
+npm start

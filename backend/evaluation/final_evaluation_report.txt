@@ -1,0 +1,22 @@
+BENGALURU PULSE
+FINAL MODEL EVALUATION REPORT
+============================================================
+
+Model: Tuned Random Forest Regressor
+Dataset records: 492
+Training samples: 393
+Testing samples: 99
+
+PERFORMANCE METRICS
+----------------------------------------
+MAE: 4.043459
+RMSE: 5.145084
+R2 Score: 0.957748
+Explained Variance: 0.957906
+
+ERROR ANALYSIS
+----------------------------------------
+Mean Error: 0.315105
+Median Absolute Error: 3.476370
+Minimum Absolute Error: 0.000000
+Maximum Absolute Error: 13.214992
