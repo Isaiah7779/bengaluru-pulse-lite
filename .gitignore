@@ -1,4 +1,31 @@
-node_modules/
-__pycache__/
-*.pyc
+# Environment / secrets
 .env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+build/
+dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# OSM source and OSRM generated data
+data/osm/
+*.osm.pbf
+*.osrm
+*.osrm.*
+
+
+# Temporary local routing files
+/routing/

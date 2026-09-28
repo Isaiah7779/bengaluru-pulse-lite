@@ -242,60 +242,415 @@ class TrafficService:
         }
 
     def commute_advisor(self, data: CommuteInput) -> Dict[str, Any]:
-        arrival_hour = int(data.preferred_arrival.split(":")[0])
-        suggestions = []
+        """
+        Calculate a traffic-aware commute recommendation using the TomTom
+        Routing API.
 
-        for minutes_before in [75, 60, 45, 30]:
-            departure_minutes = arrival_hour * 60 - minutes_before
-            departure_hour = (departure_minutes // 60) % 24
-            departure_minute = departure_minutes % 60
-            origin_congestion = compute_congestion(data.origin, departure_hour, "Clear")
-            destination_congestion = compute_congestion(data.destination, arrival_hour, "Clear")
-            average_congestion = (origin_congestion + destination_congestion) / 2
-            suggestions.append(
+        V2 improvements:
+        - Uses TomTom's real-time traffic-aware routing.
+        - Requests up to two alternatives (three routes total when available).
+        - Requests text guidance so the response contains real road/street names.
+        - Preserves actual route identity instead of inventing generic names such
+          as "Alternative Route 2".
+        - Recommends the fastest returned route based on actual travel time.
+        - Calculates departure suggestions from the requested arrival time.
+        """
+
+        import os
+
+        api_key = os.getenv("TOMTOM_API_KEY")
+
+        if not api_key:
+            raise ValueError("TOMTOM_API_KEY is not configured")
+
+        # ------------------------------------------------------------
+        # Bengaluru locations used by this application
+        # ------------------------------------------------------------
+        location_coordinates = {
+            "Marathahalli Bridge": (12.9566, 77.7010),
+            "Silk Board": (12.9172, 77.6228),
+            "KR Puram": (13.0070, 77.6950),
+            "Hebbal": (13.0358, 77.5970),
+            "Whitefield": (12.9698, 77.7499),
+            "Electronic City": (12.8452, 77.6602),
+        }
+
+        if data.origin not in location_coordinates:
+            raise ValueError(f"Unknown origin: {data.origin}")
+
+        if data.destination not in location_coordinates:
+            raise ValueError(f"Unknown destination: {data.destination}")
+
+        origin_lat, origin_lon = location_coordinates[data.origin]
+        destination_lat, destination_lon = location_coordinates[data.destination]
+
+        # ------------------------------------------------------------
+        # Parse the requested arrival time
+        # ------------------------------------------------------------
+        try:
+            requested_arrival = datetime.strptime(
+                data.preferred_arrival,
+                "%H:%M",
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "preferred_arrival must use HH:MM format"
+            ) from exc
+
+        now = datetime.now()
+
+        arrival_datetime = now.replace(
+            hour=requested_arrival.hour,
+            minute=requested_arrival.minute,
+            second=0,
+            microsecond=0,
+        )
+
+        # If the requested time has already passed today, use tomorrow.
+        if arrival_datetime <= now:
+            arrival_datetime += timedelta(days=1)
+
+        # TomTom accepts an ISO-8601 local date/time for arriveAt.
+        arrive_at = arrival_datetime.strftime("%Y-%m-%dT%H:%M:%S")
+
+        # ------------------------------------------------------------
+        # TomTom Routing API
+        # ------------------------------------------------------------
+        route_url = (
+            "https://api.tomtom.com/routing/1/"
+            f"calculateRoute/"
+            f"{origin_lat},{origin_lon}:"
+            f"{destination_lat},{destination_lon}/json"
+        )
+
+        params = {
+            "key": api_key,
+            "traffic": "true",
+            "routeType": "fastest",
+            "travelMode": "car",
+            # TomTom's maxAlternatives controls the number of alternatives
+            # in addition to the main route.
+            "maxAlternatives": 2,
+            "arriveAt": arrive_at,
+            # Request text guidance so we can extract actual road/street names
+            # from the returned route instead of displaying generic labels.
+            "instructionsType": "text",
+            "language": "en-GB",
+        }
+
+        try:
+            response = requests.get(
+                route_url,
+                params=params,
+                timeout=15,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except requests.RequestException as exc:
+            logger.exception(
+                "TomTom routing request failed for %s -> %s",
+                data.origin,
+                data.destination,
+            )
+            raise ValueError(
+                "Unable to calculate the commute route right now. "
+                "Please check the TomTom API configuration and try again."
+            ) from exc
+        except ValueError as exc:
+            logger.exception("TomTom returned invalid JSON")
+            raise ValueError(
+                "TomTom returned an invalid routing response."
+            ) from exc
+
+        routes = payload.get("routes", [])
+
+        if not isinstance(routes, list) or not routes:
+            raise ValueError(
+                "TomTom did not return any routes for the selected locations."
+            )
+
+        # ------------------------------------------------------------
+        # Helpers for route intelligence
+        # ------------------------------------------------------------
+        def route_status(delay_minutes: float) -> str:
+            if delay_minutes <= 3:
+                return "LOW"
+            if delay_minutes <= 8:
+                return "MODERATE"
+            if delay_minutes <= 15:
+                return "HIGH"
+            return "SEVERE"
+
+        def clean_road_name(value: Any) -> str | None:
+            """Normalize a TomTom street/road name."""
+            if value is None:
+                return None
+
+            value = str(value).strip()
+            if not value:
+                return None
+
+            # Avoid returning generic guidance placeholders as road names.
+            ignored = {
+                "unknown road",
+                "unnamed road",
+                "unnamed",
+                "unknown",
+                "",
+            }
+            if value.lower() in ignored:
+                return None
+
+            return value
+
+        def extract_route_roads(route: Dict[str, Any]) -> List[str]:
+            """
+            Extract real road/street names from TomTom guidance.
+
+            TomTom guidance instructions expose the street followed after a
+            maneuver and may also expose road numbers. We collect the actual
+            names, remove duplicates while preserving route order, and keep a
+            short list for the dashboard.
+            """
+            roads: List[str] = []
+
+            guidance = route.get("guidance", {})
+            instructions = guidance.get("instructions", [])
+
+            if isinstance(instructions, list):
+                for instruction in instructions:
+                    if not isinstance(instruction, dict):
+                        continue
+
+                    street = clean_road_name(instruction.get("street"))
+                    if street:
+                        roads.append(street)
+
+                    road_numbers = instruction.get("roadNumbers", [])
+                    if isinstance(road_numbers, list):
+                        for road_number in road_numbers:
+                            road_number = clean_road_name(road_number)
+                            if road_number:
+                                roads.append(road_number)
+
+                    # Some response variants expose the road as a nested
+                    # object. Support those without depending on them.
+                    road = instruction.get("road")
+                    if isinstance(road, dict):
+                        nested_name = clean_road_name(
+                            road.get("name") or road.get("street")
+                        )
+                        if nested_name:
+                            roads.append(nested_name)
+
+            # Remove duplicates while preserving the order in which roads
+            # appear along the route.
+            unique_roads: List[str] = []
+            seen = set()
+
+            for road in roads:
+                key = road.casefold()
+                if key not in seen:
+                    seen.add(key)
+                    unique_roads.append(road)
+
+            return unique_roads[:8]
+
+        def build_route_name(
+            road_names: List[str],
+            route_index: int,
+        ) -> str:
+            """Build a human-readable route identity from real road names."""
+            if road_names:
+                # Three names are enough to identify the route without making
+                # the card excessively long.
+                visible_roads = road_names[:3]
+                return " → ".join(visible_roads)
+
+            # This is only a fallback when TomTom did not provide guidance
+            # street names. We do not pretend to know a road name.
+            return (
+                "Recommended Route"
+                if route_index == 0
+                else f"TomTom Alternative {route_index}"
+            )
+
+        # ------------------------------------------------------------
+        # Normalize actual TomTom routes
+        # ------------------------------------------------------------
+        normalized_routes: List[Dict[str, Any]] = []
+
+        for index, route in enumerate(routes[:3]):
+            if not isinstance(route, dict):
+                continue
+
+            summary = route.get("summary", {})
+            if not isinstance(summary, dict):
+                summary = {}
+
+            travel_time_seconds = int(
+                summary.get("travelTimeInSeconds", 0) or 0
+            )
+
+            traffic_delay_seconds = int(
+                summary.get("trafficDelayInSeconds", 0) or 0
+            )
+
+            length_meters = int(
+                summary.get("lengthInMeters", 0) or 0
+            )
+
+            if travel_time_seconds <= 0:
+                logger.warning(
+                    "TomTom returned a route without travel time: %s",
+                    route,
+                )
+                continue
+
+            travel_minutes = round(travel_time_seconds / 60, 1)
+            delay_minutes = round(max(0, traffic_delay_seconds) / 60, 1)
+            distance_km = round(length_meters / 1000, 2)
+            status = route_status(delay_minutes)
+            road_names = extract_route_roads(route)
+            route_name = build_route_name(road_names, index)
+
+            # TomTom can provide actual timestamps. If unavailable, calculate
+            # departure from the requested arrival time and route duration.
+            tomtom_departure = summary.get("departureTime")
+            tomtom_arrival = summary.get("arrivalTime")
+
+            if tomtom_departure:
+                departure_time = str(tomtom_departure)[-8:-3]
+            else:
+                departure_datetime = arrival_datetime - timedelta(
+                    minutes=travel_minutes
+                )
+                departure_time = departure_datetime.strftime("%H:%M")
+
+            if tomtom_arrival:
+                actual_arrival_time = str(tomtom_arrival)[-8:-3]
+            else:
+                actual_arrival_time = data.preferred_arrival
+
+            normalized_routes.append(
                 {
-                    "departure_time": f"{departure_hour:02d}:{departure_minute:02d}",
-                    "origin_congestion": origin_congestion,
-                    "destination_congestion": destination_congestion,
-                    "avg_route_congestion": round(average_congestion, 2),
-                    "status": get_traffic_status(average_congestion),
-                    "estimated_travel_minutes": minutes_before,
-                    "recommended": average_congestion < 12,
+                    # IMPORTANT: The frontend already displays route.route,
+                    # so route now contains the actual road-based identity.
+                    "route": route_name,
+                    "route_name": route_name,
+                    "road_names": road_names,
+                    "type": "Live Traffic Route",
+                    "travel_time_minutes": travel_minutes,
+                    "estimated_travel_minutes": travel_minutes,
+                    "traffic_delay_minutes": delay_minutes,
+                    "distance_km": distance_km,
+                    "status": status,
+                    "departure_time": departure_time,
+                    "arrival_time": actual_arrival_time,
+                    "recommended": False,
+                    "recommended_for": "Alternative route",
+                    "typical_delay": (
+                        f"{delay_minutes:g} min"
+                        if delay_minutes > 0
+                        else "No significant delay"
+                    ),
                 }
             )
 
-        best = min(suggestions, key=lambda item: item["avg_route_congestion"])
+        if not normalized_routes:
+            raise ValueError(
+                "TomTom returned routes, but none contained valid travel-time data."
+            )
+
+        # ------------------------------------------------------------
+        # Choose the genuinely fastest returned route
+        # ------------------------------------------------------------
+        best_route = min(
+            normalized_routes,
+            key=lambda item: item["travel_time_minutes"],
+        )
+
+        for route in normalized_routes:
+            route["recommended"] = route is best_route
+
+            if route is best_route:
+                route["recommended_for"] = "Fastest arrival"
+            else:
+                time_difference = round(
+                    route["travel_time_minutes"]
+                    - best_route["travel_time_minutes"],
+                    1,
+                )
+                if time_difference > 0:
+                    route["recommended_for"] = (
+                        f"{time_difference:g} min slower than recommended"
+                    )
+                else:
+                    route["recommended_for"] = "Alternative route"
+
+        # ------------------------------------------------------------
+        # Departure suggestions
+        # ------------------------------------------------------------
+        departure_suggestions = []
+
+        # These are real departure times derived from the fastest TomTom route.
+        # They are not fake 30/45/60-minute durations.
+        buffer_minutes = [0, 5, 10]
+
+        for buffer in buffer_minutes:
+            departure_datetime = arrival_datetime - timedelta(
+                minutes=best_route["travel_time_minutes"] + buffer
+            )
+
+            departure_suggestions.append(
+                {
+                    "departure_time": departure_datetime.strftime("%H:%M"),
+                    "estimated_travel_minutes": best_route[
+                        "travel_time_minutes"
+                    ],
+                    "traffic_delay_minutes": best_route[
+                        "traffic_delay_minutes"
+                    ],
+                    "distance_km": best_route["distance_km"],
+                    "status": "RECOMMENDED" if buffer == 0 else "BUFFER",
+                    "recommended": buffer == 0,
+                    "buffer_minutes": buffer,
+                }
+            )
+
+        # ------------------------------------------------------------
+        # Advisory
+        # ------------------------------------------------------------
+        recommended_departure = departure_suggestions[0]["departure_time"]
+
+        delay_text = (
+            f"{best_route['traffic_delay_minutes']:g} min traffic delay"
+            if best_route["traffic_delay_minutes"] > 0
+            else "no significant traffic delay"
+        )
+
+        route_identity = best_route.get("route_name") or "the recommended route"
+
+        advisory = (
+            f"Leave at {recommended_departure} to arrive by "
+            f"{data.preferred_arrival}. Estimated travel time is "
+            f"{best_route['travel_time_minutes']:g} minutes for approximately "
+            f"{best_route['distance_km']:g} km, with {delay_text}. "
+            f"Recommended via {route_identity}."
+        )
+
         return {
             "origin": data.origin,
             "destination": data.destination,
             "preferred_arrival": data.preferred_arrival,
-            "departure_suggestions": suggestions,
-            "recommended_departure": best["departure_time"],
-            "route_alternatives": [
-                {
-                    "route": "Outer Ring Road (ORR)",
-                    "type": "Expressway",
-                    "typical_delay": "15-20 min",
-                    "recommended_for": "Morning peak",
-                },
-                {
-                    "route": "NICE Road Peripheral",
-                    "type": "Toll Road",
-                    "typical_delay": "5-10 min",
-                    "recommended_for": "Evening peak, low toll",
-                },
-                {
-                    "route": "Namma Metro Line",
-                    "type": "Public Transit",
-                    "typical_delay": "0-5 min",
-                    "recommended_for": "Severe congestion days",
-                },
-            ],
-            "advisory": (
-                f"Best departure from {data.origin} is at {best['departure_time']} "
-                f"for {data.preferred_arrival} arrival. Expected route congestion: "
-                f"{best['status']}."
-            ),
+            "recommended_departure": recommended_departure,
+            "departure_suggestions": departure_suggestions,
+            "route_alternatives": normalized_routes,
+            "recommended_route": best_route,
+            "advisory": advisory,
+            "source": "TomTom Routing API",
+            "traffic_aware": True,
+            "route_intelligence": True,
         }
 
     def historical_trends(self, weather: str = "Sunny") -> Dict[str, Any]:
@@ -477,3 +832,101 @@ def get_live_traffic(latitude: float, longitude: float):
     response.raise_for_status()
 
     return response.json()
+
+# ---------------------------------------------------------------------------
+# V2 - Bengaluru Live Traffic Locations
+# ---------------------------------------------------------------------------
+
+BENGALURU_TRAFFIC_POINTS = {
+    "Marathahalli Bridge": {
+        "latitude": 12.9566,
+        "longitude": 77.7010,
+    },
+    "Silk Board": {
+        "latitude": 12.9172,
+        "longitude": 77.6228,
+    },
+    "KR Puram": {
+        "latitude": 13.0070,
+        "longitude": 77.6950,
+    },
+    "Whitefield": {
+        "latitude": 12.9698,
+        "longitude": 77.7499,
+    },
+    "Hebbal": {
+        "latitude": 13.0358,
+        "longitude": 77.5970,
+    },
+    "Electronic City": {
+        "latitude": 12.8452,
+        "longitude": 77.6602,
+    },
+}
+
+def get_bengaluru_live_traffic():
+    """
+    Fetch live TomTom traffic for multiple Bengaluru locations.
+    """
+
+    results = []
+
+    for location_name, point in BENGALURU_TRAFFIC_POINTS.items():
+
+        try:
+            data = get_live_traffic(
+                point["latitude"],
+                point["longitude"],
+            )
+
+            flow = data.get("flowSegmentData", {})
+
+            current_speed = flow.get("currentSpeed", 0)
+            free_flow_speed = flow.get("freeFlowSpeed", 0)
+
+            if free_flow_speed > 0:
+                speed_ratio = current_speed / free_flow_speed
+            else:
+                speed_ratio = 0
+
+            if speed_ratio >= 0.80:
+                traffic_condition = "Normal"
+            elif speed_ratio >= 0.60:
+                traffic_condition = "Moderate"
+            elif speed_ratio >= 0.40:
+                traffic_condition = "Heavy"
+            else:
+                traffic_condition = "Severe"
+
+            coordinates = flow.get("coordinates", {})
+            road_coordinates = coordinates.get("coordinate", [])
+
+            results.append({
+                "location": location_name,
+                "latitude": point["latitude"],
+                "longitude": point["longitude"],
+                "current_speed_kmph": current_speed,
+                "free_flow_speed_kmph": free_flow_speed,
+                "speed_ratio": round(speed_ratio, 2),
+                "traffic_condition": traffic_condition,
+                "confidence": flow.get("confidence"),
+                "road_closed": flow.get("roadClosure"),
+                "coordinates": road_coordinates,
+                "success": True,
+            })
+
+        except Exception as exc:
+            logger.exception(
+                "Failed to fetch TomTom traffic for %s",
+                location_name,
+            )
+
+            results.append({
+                "location": location_name,
+                "latitude": point["latitude"],
+                "longitude": point["longitude"],
+                "success": False,
+                "error": str(exc),
+            })
+
+    return results

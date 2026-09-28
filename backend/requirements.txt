@@ -4,3 +4,5 @@ pandas
 scikit-learn
 joblib
 requests
+
+httpx>=0.27,<1.0

@@ -5,20 +5,30 @@ import logging
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import get_settings
+from config import Settings, get_settings
 from database import database
 from domain import LOCATION_META, WEATHER_ALIASES
+
 from schemas import (
     CommuteInput,
     ForecastInput,
     LocationsResponse,
     TrafficInput,
 )
+
 from services import (
     IncidentService,
     ModelBundle,
     TrafficService,
     get_live_traffic,
+    get_bengaluru_live_traffic,
+)
+
+from routing.osrm_client import OSRMError
+from routing.route_service import RoutingService
+from routing.schemas import (
+    RouteRequest,
+    RouteResponse,
 )
 
 
@@ -38,7 +48,12 @@ logger = logging.getLogger(__name__)
 # Application configuration
 # ---------------------------------------------------------------------------
 
-settings = get_settings()
+settings: Settings = get_settings()
+
+
+# ---------------------------------------------------------------------------
+# FastAPI application
+# ---------------------------------------------------------------------------
 
 app = FastAPI(
     title=settings.app_name,
@@ -71,7 +86,12 @@ except Exception:
     raise
 
 traffic_service = TrafficService()
-incident_service = IncidentService(settings)
+
+incident_service = IncidentService(
+    settings
+)
+
+routing_service = RoutingService()
 
 
 # ---------------------------------------------------------------------------
@@ -93,12 +113,15 @@ def home() -> dict:
             "/history",
             "/dashboard",
             "/database-analytics",
+            "/routing/route",
             "/forecast",
             "/hotspots",
             "/analytics",
             "/commute-advisor",
             "/historical-trends",
             "/incidents",
+            "/api/live-traffic",
+            "/api/live-traffic/bengaluru",
             "/docs",
         ],
     }
@@ -164,7 +187,10 @@ def predict(data: TrafficInput) -> dict:
         return result
 
     except ValueError as exc:
-        logger.warning("Invalid prediction input: %s", exc)
+        logger.warning(
+            "Invalid prediction input: %s",
+            exc,
+        )
 
         raise HTTPException(
             status_code=422,
@@ -172,7 +198,9 @@ def predict(data: TrafficInput) -> dict:
         ) from exc
 
     except Exception as exc:
-        logger.exception("Prediction failed")
+        logger.exception(
+            "Prediction failed"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -197,7 +225,9 @@ def history() -> dict:
         }
 
     except Exception as exc:
-        logger.exception("Failed to retrieve prediction history")
+        logger.exception(
+            "Failed to retrieve prediction history"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -223,7 +253,9 @@ def dashboard() -> dict:
         }
 
     except Exception as exc:
-        logger.exception("Failed to generate dashboard data")
+        logger.exception(
+            "Failed to generate dashboard data"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -243,7 +275,9 @@ def database_analytics() -> dict:
         return database.analytics()
 
     except Exception as exc:
-        logger.exception("Failed to calculate database analytics")
+        logger.exception(
+            "Failed to calculate database analytics"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -263,7 +297,9 @@ def forecast(data: ForecastInput) -> dict:
         return traffic_service.forecast(data)
 
     except Exception as exc:
-        logger.exception("Forecast failed")
+        logger.exception(
+            "Forecast failed"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -291,7 +327,9 @@ def hotspots(
         return traffic_service.hotspots(weather)
 
     except Exception as exc:
-        logger.exception("Hotspot calculation failed")
+        logger.exception(
+            "Hotspot calculation failed"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -329,7 +367,9 @@ def analytics(
         )
 
     except Exception as exc:
-        logger.exception("Analytics generation failed")
+        logger.exception(
+            "Analytics generation failed"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -342,14 +382,18 @@ def analytics(
 # ---------------------------------------------------------------------------
 
 @app.post("/commute-advisor")
-def commute_advisor(data: CommuteInput) -> dict:
+def commute_advisor(
+    data: CommuteInput,
+) -> dict:
     """Recommend departure times and route alternatives."""
 
     try:
         return traffic_service.commute_advisor(data)
 
     except Exception as exc:
-        logger.exception("Commute advisor failed")
+        logger.exception(
+            "Commute advisor failed"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -377,7 +421,9 @@ def historical_trends(
         return traffic_service.historical_trends(weather)
 
     except Exception as exc:
-        logger.exception("Historical trend generation failed")
+        logger.exception(
+            "Historical trend generation failed"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -397,61 +443,216 @@ def incidents() -> dict:
         return incident_service.fetch_incidents()
 
     except Exception as exc:
-        logger.exception("Incident service failed")
+        logger.exception(
+            "Incident service failed"
+        )
 
         raise HTTPException(
             status_code=500,
             detail="Unable to retrieve traffic incidents",
         ) from exc
-        
+
+
 # ---------------------------------------------------------------------------
 # TomTom Live Traffic
 # ---------------------------------------------------------------------------
 
 @app.get("/api/live-traffic")
 def live_traffic(
-    latitude: float = Query(..., description="Latitude"),
-    longitude: float = Query(..., description="Longitude"),
+    latitude: float = Query(
+        ...,
+        description="Latitude",
+    ),
+    longitude: float = Query(
+        ...,
+        description="Longitude",
+    ),
 ) -> dict:
     """Get live traffic data for the road segment nearest to a coordinate."""
 
     try:
-        data = get_live_traffic(latitude, longitude)
+        data = get_live_traffic(
+            latitude,
+            longitude,
+        )
 
-        flow = data.get("flowSegmentData", {})
-        current_speed = flow.get("currentSpeed", 0)
-        free_flow_speed = flow.get("freeFlowSpeed", 0)
+        flow = data.get(
+            "flowSegmentData",
+            {},
+        )
+
+        current_speed = flow.get(
+            "currentSpeed",
+            0,
+        )
+
+        free_flow_speed = flow.get(
+            "freeFlowSpeed",
+            0,
+        )
+
         if free_flow_speed > 0:
-            speed_ratio = current_speed / free_flow_speed
+            speed_ratio = (
+                current_speed
+                / free_flow_speed
+            )
         else:
             speed_ratio = 0
+
         if speed_ratio >= 0.80:
             traffic_condition = "Normal"
+
         elif speed_ratio >= 0.60:
             traffic_condition = "Moderate"
+
         elif speed_ratio >= 0.40:
             traffic_condition = "Heavy"
+
         else:
             traffic_condition = "Severe"
 
         return {
-    "success": True,
-    "latitude": latitude,
-    "longitude": longitude,
-    "current_speed_kmph": current_speed,
-    "free_flow_speed_kmph": free_flow_speed,
-    "speed_ratio": round(speed_ratio, 2),
-    "traffic_condition": traffic_condition,
-    "current_travel_time_seconds": flow.get("currentTravelTime"),
-    "free_flow_travel_time_seconds": flow.get("freeFlowTravelTime"),
-    "confidence": flow.get("confidence"),
-    "road_closed": flow.get("roadClosure"),
-    "coordinates": flow.get("coordinates"),
-}
+            "success": True,
+            "latitude": latitude,
+            "longitude": longitude,
+            "current_speed_kmph": current_speed,
+            "free_flow_speed_kmph": free_flow_speed,
+            "speed_ratio": round(
+                speed_ratio,
+                2,
+            ),
+            "traffic_condition": traffic_condition,
+            "current_travel_time_seconds": flow.get(
+                "currentTravelTime"
+            ),
+            "free_flow_travel_time_seconds": flow.get(
+                "freeFlowTravelTime"
+            ),
+            "confidence": flow.get(
+                "confidence"
+            ),
+            "road_closed": flow.get(
+                "roadClosure"
+            ),
+            "coordinates": flow.get(
+                "coordinates"
+            ),
+        }
 
     except Exception as exc:
-        logger.exception("TomTom live traffic request failed")
+        logger.exception(
+            "TomTom live traffic request failed"
+        )
+
         raise HTTPException(
             status_code=502,
-            detail=f"Unable to retrieve live traffic data: {exc}",
+            detail=(
+                "Unable to retrieve live traffic data: "
+                f"{exc}"
+            ),
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# V2 - Bengaluru Multi-Road Live Traffic
+# ---------------------------------------------------------------------------
+
+@app.get("/api/live-traffic/bengaluru")
+def bengaluru_live_traffic() -> dict:
+    """
+    Get live TomTom traffic for multiple Bengaluru road locations.
+    """
+
+    try:
+        traffic = get_bengaluru_live_traffic()
+
+        successful = [
+            item
+            for item in traffic
+            if item.get("success")
+        ]
+
+        return {
+            "success": True,
+            "total_locations": len(
+                traffic
+            ),
+            "successful_locations": len(
+                successful
+            ),
+            "traffic": traffic,
+        }
+
+    except Exception as exc:
+        logger.exception(
+            "Bengaluru multi-road traffic request failed"
         )
+
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Unable to retrieve Bengaluru "
+                f"live traffic: {exc}"
+            ),
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# V2 Routing
+# ---------------------------------------------------------------------------
+
+@app.post(
+    "/routing/route",
+    response_model=RouteResponse,
+)
+async def calculate_route(
+    data: RouteRequest,
+) -> RouteResponse:
+    """
+    Calculate a route through the Bengaluru OSM road network.
+
+    Current implementation:
+
+    - Local OSRM provides the base road-network route.
+    - TomTom may provide live traffic intelligence.
+    - If TomTom is unavailable, OSRM routing still works.
+    - Vehicle-specific OSRM profiles are not yet implemented;
+      the current OSRM graph uses the driving profile.
+    """
+
+    try:
+        return await routing_service.calculate_route(
+            data
+        )
+
+    except ValueError as exc:
+        logger.warning(
+            "Routing validation error: %s",
+            exc,
+        )
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except OSRMError as exc:
+        logger.warning(
+            "OSRM routing error: %s",
+            exc,
+        )
+
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        logger.exception(
+            "Unexpected routing failure"
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Routing failed",
+        ) from exc
