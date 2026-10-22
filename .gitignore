@@ -39,3 +39,17 @@ backend/models/
 
 # Submission packages
 dist/
+
+# Firebase: emulator logs/exports, service-account keys, native app configs
+firebase/*-debug.log
+firebase/emulator-data/
+*-firebase-adminsdk-*.json
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# Android release signing material (never commit)
+*.keystore
+!mobile/android/app/debug.keystore
+*.jks
+keystore.properties
