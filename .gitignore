@@ -31,3 +31,8 @@ data/osm/
 
 # Temporary local routing files
 /routing/
+
+# Local data: OSM extracts, OSRM graphs, build logs, env backups
+data/
+backend/runtime/
+backend/models/

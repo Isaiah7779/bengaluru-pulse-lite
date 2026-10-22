@@ -1,22 +1,107 @@
+# Bengaluru Pulse — full local / single-VM stack.
+#
+#   docker compose up -d --build
+#
+# OSRM graphs are pre-built once (infrastructure/osrm/build_osrm.sh) and mounted
+# read-only, so restarts never regenerate them. Secrets come from backend/.env
+# (gitignored) and the root .env (see .env.example); compose `environment`
+# overrides container-specific values such as service hostnames.
+
+x-backend-env: &backend-env
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+  DATABASE_URL: postgresql://pulse:${POSTGRES_PASSWORD:-pulse_dev_only}@postgres:5432/pulse
+  DB_AUTO_CREATE: "false"
+  OSRM_URL: http://osrm-car:5000
+  OSRM_FOOT_URL: http://osrm-foot:5000
+  OSRM_BICYCLE_URL: http://osrm-bicycle:5000
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+  LOG_JSON: "true"
+
 services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: pulse
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulse_dev_only}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulse -d pulse"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  osrm-car:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: osrm-routed --algorithm mld --max-alternatives 3 /data/bengaluru.osrm
+    volumes:
+      - ${OSRM_CAR_DIR:-./data/osm}:/data:ro
+    ports:
+      - "127.0.0.1:5000:5000"
+    healthcheck: &osrm-health
+      # The OSRM image has no curl/wget; use bash /dev/tcp for a real nearest-road query.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/5000 && printf 'GET /nearest/v1/x/77.5946,12.9716 HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"code\":\"Ok\"' <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  osrm-foot:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: osrm-routed --algorithm mld --max-alternatives 3 /data/bengaluru.osrm
+    volumes:
+      - ${OSRM_FOOT_DIR:-./data/osrm-foot}:/data:ro
+    ports:
+      - "127.0.0.1:5001:5000"
+    healthcheck: *osrm-health
+    restart: unless-stopped
+
+  osrm-bicycle:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: osrm-routed --algorithm mld --max-alternatives 3 /data/bengaluru.osrm
+    volumes:
+      - ${OSRM_BICYCLE_DIR:-./data/osrm-bicycle}:/data:ro
+    ports:
+      - "127.0.0.1:5002:5000"
+    healthcheck: *osrm-health
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
     environment:
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
-      OSRM_URL: ${OSRM_URL:-http://osrm:5000}
-      TOMTOM_API_KEY: ${TOMTOM_API_KEY:-}
-      TRAFFIC_DB_PATH: /app/runtime/traffic.db
+      <<: *backend-env
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
-      - traffic_data:/app/runtime
+      - models:/app/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: ./backend
+    command: ["sh", "-c", "python -m alembic upgrade head && python -m traffic.collector"]
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      <<: *backend-env
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
-      interval: 20s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -26,21 +111,13 @@ services:
       args:
         REACT_APP_API_BASE_URL: /api
     ports:
-      - "8080:80"
+      - "${FRONTEND_PORT:-8080}:80"
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
 
-  osrm:
-    image: osrm/osrm-backend:v5.27.1
-    profiles: ["routing"]
-    command: osrm-routed --algorithm mld /data/bengaluru.osrm
-    volumes:
-      - ./data/osrm:/data:ro
-    ports:
-      - "5000:5000"
-    restart: unless-stopped
-
 volumes:
-  traffic_data:
+  pgdata:
+    name: bp_pgdata
+  models:

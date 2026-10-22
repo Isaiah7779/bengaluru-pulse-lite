@@ -1,17 +1,24 @@
-# Project status
+# Project Status — Bengaluru Pulse V2
 
-## Working and verified
+_Last updated: 2026-10-22 — living resume file. Update at every phase boundary._
 
-- FastAPI health, locations, and model-prediction endpoints.
-- OSRM client and diverse candidate routing logic.
-- Strict shortcut and longcut classification based on both distance and time.
-- React dashboard unit test and production build.
-- Container definitions for frontend, backend, and the mounted Bengaluru OSRM graph.
+Branch: `v2-build` (local only, not pushed). Baseline snapshot commit `2e42577`.
 
-## External configuration required
+## Phase progress
 
-- OSRM runtime: Docker Desktop or a separately hosted OSRM service.
-- Live traffic: a valid TomTom API key.
-- Weather, incidents, historical traffic collection, PostGIS, authentication,
-  and community routes are not marked complete because no real provider/data
-  pipeline is configured for them. The application does not fabricate these data.
+| Phase | State | Notes |
+|---|---|---|
+| 0 Audit | ✅ done | PROJECT_AUDIT.md, IMPLEMENTATION_ROADMAP.md |
+| 1 Foundation | ⏳ in progress | |
+| 2–15 | pending | |
+
+## Environment notes for resuming
+
+* Python: `.venv-v2/Scripts/python.exe`; run backend tests from `backend/`.
+* Docker Desktop must be started manually; OSRM graph in `data/osm/`.
+* `backend/.env` holds the real TomTom key — never print or commit it.
+* Repo lives in OneDrive: avoid walking `node_modules`/`.venv*`/`tools/`.
+
+## Blockers
+
+* Public deployment requires owner-created hosting accounts (see roadmap).

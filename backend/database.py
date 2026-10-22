@@ -1,59 +1,17 @@
+"""Legacy prediction-history store, now backed by the main SQLAlchemy database.
+
+Interface kept identical for services.ModelBundle and the legacy endpoints.
 """
-SQLite Database Service for Bengaluru Pulse
 
-Stores prediction history for analytics and dashboard.
-"""
+from __future__ import annotations
 
-import sqlite3
-import os
-from pathlib import Path
-from datetime import datetime, timezone
+from sqlalchemy import delete, func, select
 
-BASE_DIR = Path(__file__).resolve().parent
-DATABASE_PATH = Path(
-    os.getenv("TRAFFIC_DB_PATH", str(BASE_DIR / "traffic.db"))
-)
+from db.models import LegacyPrediction
+from db.session import session_scope
 
 
 class Database:
-
-    def __init__(self):
-        DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(
-            DATABASE_PATH,
-            check_same_thread=False
-        )
-        self.connection.row_factory = sqlite3.Row
-        self.create_table()
-
-    def create_table(self):
-
-        cursor = self.connection.cursor()
-
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS predictions (
-
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            timestamp TEXT,
-
-            location TEXT,
-
-            traffic_volume INTEGER,
-
-            average_speed REAL,
-
-            weather TEXT,
-
-            predicted_congestion REAL,
-
-            traffic_status TEXT
-
-        )
-        """)
-
-        self.connection.commit()
-
     def save_prediction(
         self,
         location,
@@ -63,105 +21,56 @@ class Database:
         predicted_congestion,
         traffic_status,
     ):
-
-        cursor = self.connection.cursor()
-
-        cursor.execute(
-            """
-            INSERT INTO predictions(
-
-                timestamp,
-
-                location,
-
-                traffic_volume,
-
-                average_speed,
-
-                weather,
-
-                predicted_congestion,
-
-                traffic_status
-
+        with session_scope() as session:
+            session.add(
+                LegacyPrediction(
+                    location=location,
+                    traffic_volume=int(traffic_volume),
+                    average_speed=float(average_speed),
+                    weather=weather,
+                    predicted_congestion=float(predicted_congestion),
+                    traffic_status=traffic_status,
+                )
             )
 
-            VALUES(?,?,?,?,?,?,?)
-            """,
-            (
-                datetime.now(timezone.utc).isoformat(),
-                location,
-                traffic_volume,
-                average_speed,
-                weather,
-                predicted_congestion,
-                traffic_status,
-            ),
-        )
-
-        self.connection.commit()
-
-    def get_history(self):
-
-        cursor = self.connection.cursor()
-
-        cursor.execute("""
-            SELECT *
-            FROM predictions
-            ORDER BY id DESC
-        """)
-
-        return [dict(row) for row in cursor.fetchall()]
+    def get_history(self, limit: int = 500):
+        with session_scope() as session:
+            rows = session.scalars(
+                select(LegacyPrediction).order_by(LegacyPrediction.id.desc()).limit(limit)
+            ).all()
+            return [
+                {
+                    "id": r.id,
+                    "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+                    "location": r.location,
+                    "traffic_volume": r.traffic_volume,
+                    "average_speed": r.average_speed,
+                    "weather": r.weather,
+                    "predicted_congestion": r.predicted_congestion,
+                    "traffic_status": r.traffic_status,
+                }
+                for r in rows
+            ]
 
     def analytics(self):
-
-        cursor = self.connection.cursor()
-
-        cursor.execute("""
-            SELECT COUNT(*)
-            FROM predictions
-        """)
-
-        total_predictions = cursor.fetchone()[0]
-
-        cursor.execute("""
-            SELECT AVG(predicted_congestion)
-            FROM predictions
-        """)
-
-        avg_congestion = cursor.fetchone()[0]
-
-        cursor.execute("""
-            SELECT location, COUNT(*) as total
-            FROM predictions
-            GROUP BY location
-            ORDER BY total DESC
-            LIMIT 1
-        """)
-
-        row = cursor.fetchone()
-
-        most_common_location = row[0] if row else "N/A"
-
+        with session_scope() as session:
+            total = session.scalar(select(func.count(LegacyPrediction.id))) or 0
+            avg = session.scalar(select(func.avg(LegacyPrediction.predicted_congestion)))
+            row = session.execute(
+                select(LegacyPrediction.location, func.count().label("n"))
+                .group_by(LegacyPrediction.location)
+                .order_by(func.count().desc())
+                .limit(1)
+            ).first()
         return {
-
-            "total_predictions": total_predictions,
-
-            "average_congestion": round(avg_congestion, 2)
-            if avg_congestion
-            else 0,
-
-            "most_common_location": most_common_location,
-
+            "total_predictions": total,
+            "average_congestion": round(avg, 2) if avg else 0,
+            "most_common_location": row[0] if row else "N/A",
         }
 
     def clear_history(self):
-
-        cursor = self.connection.cursor()
-
-        cursor.execute("DELETE FROM predictions")
-
-        self.connection.commit()
+        with session_scope() as session:
+            session.execute(delete(LegacyPrediction))
 
 
 database = Database()
