@@ -99,6 +99,14 @@ legacy `/predict` endpoint and is not used for routing.
   verified by `tests/test_forecasting.py` on clearly labelled synthetic fixtures;
   those fixtures are never reported as results.
 
+## Prospective evaluation (M1, running)
+
+`forecasting/online.py` logs persistence, seasonal-naive and historical-average
+forecasts for every monitored point after each flow sweep and attaches the actual
+value once the target bucket has passed (`python -m forecasting.online report`,
+`GET /v1/admin/forecast/online`). Plan and definitions:
+[RESEARCH_MILESTONE_FORECASTING.md](RESEARCH_MILESTONE_FORECASTING.md).
+
 ## Graph neural networks
 
 Not built. A spatiotemporal GNN needs a dense sensor graph with weeks of

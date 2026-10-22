@@ -9,7 +9,7 @@ Actions (the branch is not pushed).
 
 | Suite | Command | Result |
 |---|---|---|
-| Backend (unit + live integration) | `cd backend && python -m pytest -q` | **104 passed**, 0 failed, 0 skipped (219.8 s) |
+| Backend (unit + live integration) | `cd backend && python -m pytest -q` | **104 passed**, 0 failed, 0 skipped (219.8 s); re-run in the release audit: 104 passed, then **115 passed** after its additions (see RELEASE_READINESS.md) |
 | Frontend | `CI=true npx react-scripts test --watchAll=false` | **7 passed** |
 | Frontend production build | `CI=true npm run build` (lint warnings = errors) | compiled; 221.9 kB JS gz, 9.2 kB CSS |
 | Mobile typecheck | `npx tsc --noEmit` | 0 errors |

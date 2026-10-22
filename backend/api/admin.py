@@ -167,6 +167,15 @@ def models(db: Session = Depends(get_db)):
     return {"models": out}
 
 
+@router.get("/forecast/online")
+def forecast_online(db: Session = Depends(get_db)):
+    """Prospective prediction-versus-actual error of the logged baselines."""
+
+    from forecasting.online import report
+
+    return report(db)
+
+
 @router.get("/system-health")
 async def system_health(settings: Settings = Depends(settings_dep), db: Session = Depends(get_db)):
     checks = await dependency_report(settings)

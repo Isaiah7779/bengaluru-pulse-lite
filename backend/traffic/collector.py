@@ -124,11 +124,29 @@ async def _retrain() -> dict:
     return await asyncio.to_thread(run_retrain)
 
 
+async def collect_flow_and_log(settings: Settings, tomtom: Optional[TomTomProvider] = None) -> Dict[str, int]:
+    """Flow sweep, then prospective forecast logging from the stored data.
+
+    The logging step makes no provider requests and can never fail the sweep.
+    """
+
+    stats = await collect_flow(settings, tomtom)
+    if stats.get("stored"):
+        try:
+            from forecasting.online import run_cycle
+
+            result = await asyncio.to_thread(run_cycle)
+            logger.info("Forecast logging: %s", result)
+        except Exception:
+            logger.exception("Forecast logging failed (collection unaffected)")
+    return stats
+
+
 def build_tasks(settings: Settings, include_daily: bool = True) -> list[Task]:
     tomtom = TomTomProvider(settings)
     weather = OpenMeteoProvider(settings)
     tasks = [
-        Task("flow", settings.collector_flow_interval_minutes * 60, lambda: collect_flow(settings, tomtom)),
+        Task("flow", settings.collector_flow_interval_minutes * 60, lambda: collect_flow_and_log(settings, tomtom)),
         Task("weather", settings.collector_weather_interval_minutes * 60, lambda: collect_weather(settings, weather)),
         Task("incidents", settings.collector_incident_interval_minutes * 60, lambda: collect_incidents(settings, tomtom)),
     ]

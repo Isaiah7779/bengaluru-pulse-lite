@@ -27,6 +27,12 @@ Branch `v2-build` (local; not pushed). Commits on top of `main`: baseline snapsh
 | 14 Verification | ✅ local | TEST_REPORT.md |
 | 15 Docs | ✅ | docs/ |
 
+## Release audit (2026‑10‑22)
+
+See [RELEASE_READINESS.md](RELEASE_READINESS.md): 115 backend + 7 frontend tests
+pass; two defects fixed (TomTom 401 handling; unwritable/unshared model and report
+directories); prospective forecast logging (milestone M1) running.
+
 ## Next actions (owner)
 
 1. Decide whether to push `v2-build` to `github.com/Isaiah7779/bengaluru-pulse-lite` (public) → CI runs.
