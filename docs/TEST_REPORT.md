@@ -212,3 +212,26 @@ phone width). No physical Android device, iPad, Mac or Linux desktop was availab
 | Firefox, Safari desktop, macOS, Linux | — | **not tested** (not available) |
 
 User-verified earlier: iPhone Safari via the tunnel URL and the LAN URL, with route planning.
+
+## Packaging verification (v4, 22 Oct 2026, 16:45–17:05 UTC)
+
+Final archive: `dist/bengaluru-pulse-v2-r4-source-v4.zip` (contains this section). Checks were
+**run** on a candidate archive built from commit `8bce7a0`; the final archive differs only in
+documentation files (verified by comparing every non-`docs/` member byte for byte) and was re-scanned.
+
+| Check | Outcome |
+|---|---|
+| Integrity (CRC of every member) | OK |
+| Members | 204 files, 5.6 MB uncompressed |
+| Forbidden paths (`.env`, `node_modules`, venvs, caches, build output, `mobile/android`, APKs, databases, `data/`, OSRM graphs, keys) | none |
+| Real secret values (5, not printed) / generic credential patterns | none / none |
+| Required files (incl. `mobile/eas.json`, compose, migrations, scripts, templates, docs) | present |
+| Extracted: `docker compose config` | valid, 7 services; production overlay refuses without `PUBLIC_HOST` (by design) |
+| Extracted: `prepare_graphs.sh` | LF endings, `bash -n` ok |
+| Extracted: backend `pytest` (no `.env`; integration tests used the running local OSRM/PostGIS) | **115 passed** |
+| Extracted: mobile `npm ci`, `tsc --noEmit`, `expo-doctor` | 464 packages; 0 errors; 20/20 |
+| Extracted: frontend `npm ci`, tests, production build | 1,358 packages; **7 passed**; compiled, API base `/api` |
+
+Not run from the archive: `docker compose up --build` (port collision with the running stack;
+road graphs not included) and native mobile builds (the Android APK was built from the
+working tree, which has identical mobile source).
