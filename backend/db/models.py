@@ -337,6 +337,7 @@ class EvaluationRecord(Base):
     model_version_id: Mapped[int] = mapped_column(ForeignKey("model_versions.id", ondelete="CASCADE"), index=True)
     split: Mapped[str] = mapped_column(String(16))  # validation | test | online
     horizon: Mapped[str] = mapped_column(String(16))
+    candidate: Mapped[Optional[str]] = mapped_column(String(64))  # e.g. baseline:persistence, model:hgb_lr0.05_l15
     metric: Mapped[str] = mapped_column(String(16))
     value: Mapped[float] = mapped_column(Float)
     n_samples: Mapped[int] = mapped_column(Integer)

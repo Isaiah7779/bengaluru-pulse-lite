@@ -1,0 +1,21 @@
+{
+  "task": "segment_speed_ratio",
+  "name": "segment-speed-ratio",
+  "dataset": "Bengaluru Pulse collected TomTom flow observations (26 monitored points)",
+  "notes": "Current/free-flow speed ratio at monitored points, 30-120 minutes ahead.",
+  "generated_at": "2026-10-22T04:30:29.538490+00:00",
+  "data_validation": {
+    "rows_raw": 78,
+    "low_confidence_dropped": 0,
+    "duplicates_merged": 0
+  },
+  "series": 26,
+  "observations": 78,
+  "span_days": 0.04,
+  "period": [
+    "2026-10-22 03:00:00+00:00",
+    "2026-10-22 04:00:00+00:00"
+  ],
+  "status": "insufficient_data",
+  "reason": "0.0 days collected; at least 14 days required for a chronological train/validation/test evaluation"
+}

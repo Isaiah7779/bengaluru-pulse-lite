@@ -100,19 +100,37 @@ class Task:
         self.next_run = time.monotonic() + self.interval_s * (backoff if not ok else 1)
 
 
-def build_tasks(settings: Settings) -> list[Task]:
+async def _maintenance(settings: Settings) -> dict:
+    from traffic.maintenance import run_retention
+
+    return await asyncio.to_thread(run_retention, settings)
+
+
+async def _retrain() -> dict:
+    from traffic.maintenance import run_retrain
+
+    return await asyncio.to_thread(run_retrain)
+
+
+def build_tasks(settings: Settings, include_daily: bool = True) -> list[Task]:
     tomtom = TomTomProvider(settings)
     weather = OpenMeteoProvider(settings)
-    return [
+    tasks = [
         Task("flow", settings.collector_flow_interval_minutes * 60, lambda: collect_flow(settings, tomtom)),
         Task("weather", settings.collector_weather_interval_minutes * 60, lambda: collect_weather(settings, weather)),
         Task("incidents", settings.collector_incident_interval_minutes * 60, lambda: collect_incidents(settings, tomtom)),
     ]
+    if include_daily:
+        day = 24 * 3600
+        # First run after one hour so a restart loop never hammers the jobs.
+        tasks.append(Task("maintenance", day, lambda: _maintenance(settings), next_run=time.monotonic() + 3600))
+        tasks.append(Task("retrain", day, _retrain, next_run=time.monotonic() + 2 * 3600))
+    return tasks
 
 
 async def run_once(settings: Settings) -> dict:
     results = {}
-    for task in build_tasks(settings):
+    for task in build_tasks(settings, include_daily=False):
         try:
             results[task.name] = await task.run()
         except Exception as exc:  # isolate task failures

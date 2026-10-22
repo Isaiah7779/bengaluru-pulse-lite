@@ -178,3 +178,23 @@ def test_collector_flow_with_fake_provider():
 
     stats = asyncio.run(collect_flow(get_settings(), Fake()))
     assert stats == {"stored": 3, "duplicate": 0, "invalid": 1, "skipped": 1}
+
+
+def test_retention_job_removes_expired_personal_and_observation_data():
+    from db.models import Trip, User
+    from traffic.maintenance import run_retention
+
+    settings = get_settings()
+    old = datetime.now(timezone.utc) - timedelta(days=settings.retention_trip_days + 5)
+    with session_scope() as s:
+        u = User(email="r@example.com", password_hash="x", display_name="R")
+        s.add(u)
+        s.flush()
+        s.add(Trip(user_id=u.id, origin_lat=1, origin_lon=1, destination_lat=2, destination_lon=2, vehicle="car", preference="fastest", created_at=old))
+        s.add(Trip(user_id=u.id, origin_lat=1, origin_lon=1, destination_lat=2, destination_lon=2, vehicle="car", preference="fastest"))
+        seg = ensure_segments(s)[0]
+        store_flow(s, seg, reading(datetime.now(timezone.utc) - timedelta(days=settings.retention_observation_days + 1)))
+    result = run_retention(settings)
+    assert result["trips"] == 1 and result["traffic_observations"] == 1
+    with session_scope() as s:
+        assert s.query(Trip).count() == 1
