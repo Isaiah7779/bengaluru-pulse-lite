@@ -56,6 +56,9 @@ def clean_db():
     from routing import engine as routing_engine
 
     routing_engine._TIMING_CACHE.clear()
+    from routing.osrm_client import reset_breakers
+
+    reset_breakers()
     yield
 
 

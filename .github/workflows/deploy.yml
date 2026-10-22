@@ -1,0 +1,46 @@
+name: Deploy (manual)
+
+# Runs only when triggered by hand. Requires repository secrets:
+#   DEPLOY_HOST     server address (e.g. Oracle Cloud Always Free VM)
+#   DEPLOY_USER     SSH user
+#   DEPLOY_SSH_KEY  private key for that user
+#   DEPLOY_PATH     checkout path on the server (e.g. /opt/bengaluru-pulse)
+# The server keeps its own .env (PUBLIC_HOST, JWT_SECRET, POSTGRES_PASSWORD,
+# TOMTOM_API_KEY) and pre-built OSRM graphs; secrets never pass through CI logs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to deploy
+        default: main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          REF: ${{ inputs.ref }}
+        run: |
+          install -m 600 /dev/null key && printf '%s\n' "$SSH_KEY" > key
+          ssh -i key -o StrictHostKeyChecking=accept-new "$USER@$HOST" bash -s <<EOF
+            set -euo pipefail
+            cd "$DEPLOY_PATH"
+            git fetch --all --prune && git checkout "$REF" && git pull --ff-only || true
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+          EOF
+          rm -f key
+      - name: Smoke test public endpoint
+        env:
+          HOST: ${{ vars.PUBLIC_HOST }}
+        if: ${{ vars.PUBLIC_HOST != '' }}
+        run: |
+          for i in $(seq 1 30); do curl -fs "https://$HOST/api/health" && exit 0; sleep 10; done
+          exit 1

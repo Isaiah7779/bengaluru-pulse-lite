@@ -7,6 +7,7 @@ lon,lat order here.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import httpx
@@ -26,20 +27,40 @@ class OSRMNoRoute(OSRMError):
     """OSRM is up but found no route (e.g. point not connected to the network)."""
 
 
+# Circuit breaker: base_url -> monotonic time until which the server is treated
+# as down. Prevents piling up connections/DNS lookups (which hold event-loop
+# resolver threads) against a server that just failed.
+_DOWN_UNTIL: Dict[str, float] = {}
+BREAKER_SECONDS = 20.0
+
+
+def reset_breakers() -> None:
+    _DOWN_UNTIL.clear()
+
+
 class OSRMClient:
     def __init__(self, base_url: str = "http://localhost:5000", timeout: float = 10.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
+    def _trip(self) -> None:
+        _DOWN_UNTIL[self.base_url] = time.monotonic() + BREAKER_SECONDS
+
     async def _get(self, path: str, params: Dict[str, str]) -> Dict[str, Any]:
+        if _DOWN_UNTIL.get(self.base_url, 0.0) > time.monotonic():
+            raise OSRMError("Routing engine unavailable (recent connection failure; retrying shortly)")
         url = f"{self.base_url}{path}"
         try:
             async with async_client(httpx.Timeout(self.timeout, connect=3.0)) as client:
                 response = await client.get(url, params=params)
-        except httpx.TimeoutException as exc:
+        except httpx.ReadTimeout as exc:
             raise OSRMError("Routing engine timed out") from exc
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.TimeoutException) as exc:
+            self._trip()
+            raise OSRMError(f"Routing engine unreachable ({type(exc).__name__})") from exc
         except httpx.HTTPError as exc:
             raise OSRMError(f"Routing engine unreachable ({type(exc).__name__})") from exc
+        _DOWN_UNTIL.pop(self.base_url, None)
         try:
             payload = response.json()
         except ValueError as exc:

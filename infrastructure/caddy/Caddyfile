@@ -1,0 +1,11 @@
+{$PUBLIC_HOST} {
+	encode gzip zstd
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+	}
+	# The frontend nginx serves the React build and proxies /api/* to FastAPI.
+	reverse_proxy frontend:80
+}

@@ -180,3 +180,28 @@ def test_incidents_must_run_along_the_route_not_cross_it():
     assert incident_on_route(_Inc(crossing), index)[0] is False
     assert incident_on_route(_Inc(None, 12.90001, 77.611), index)[0] is True  # point on the road
     assert incident_on_route(_Inc(None, 12.9005, 77.611), index)[0] is False  # ~55 m away
+
+
+def test_osrm_circuit_breaker_fails_fast_after_connection_failure(monkeypatch):
+    import time as _time
+
+    import httpx
+
+    from routing import osrm_client
+    from routing.osrm_client import OSRMClient, OSRMError
+
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        raise httpx.ConnectError("refused", request=request)
+
+    monkeypatch.setattr(osrm_client, "async_client", lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=timeout))
+    client = OSRMClient("http://osrm-dead.test")
+    with pytest.raises(OSRMError):
+        asyncio.run(client.nearest(12.97, 77.59))
+    start = _time.monotonic()
+    with pytest.raises(OSRMError, match="recent connection failure"):
+        asyncio.run(client.nearest(12.97, 77.59))
+    assert calls["n"] == 1 and _time.monotonic() - start < 0.1
+    assert asyncio.run(client.health()) is False
