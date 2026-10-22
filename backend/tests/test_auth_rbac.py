@@ -139,3 +139,28 @@ def test_account_deletion_removes_personal_data(client, user_headers):
         from db.models import FavouritePlace
 
         assert s.query(FavouritePlace).count() == 0
+
+
+def test_admin_bootstrap_cli_rules():
+    import pytest
+
+    from auth.bootstrap import bootstrap
+
+    with pytest.raises(SystemExit):
+        bootstrap("root@example.com", "Root", "short1A", promote=False, force=False)  # weak
+    assert "created" in bootstrap("root@example.com", "Root", "Very-Strong-Pass-2026", promote=False, force=False)
+    with pytest.raises(SystemExit):
+        bootstrap("second@example.com", "S", "Very-Strong-Pass-2026", promote=False, force=False)  # admin exists
+    make_user("promote@example.com")
+    assert "promoted" in bootstrap("promote@example.com", "P", None, promote=True, force=True)
+    with session_scope() as s:
+        from db.models import AuditLog
+
+        assert s.query(AuditLog).filter(AuditLog.action.like("admin.bootstrap_%")).count() == 2
+
+
+def test_login_works_for_addresses_on_reserved_domains(client):
+    make_user("admin@pulse.test", "Admin-Pass-123", role="admin")
+    assert client.post("/v1/auth/login", json={"email": "admin@pulse.test", "password": "Admin-Pass-123"}).status_code == 200
+    bad = client.post("/v1/auth/register", json={"email": "x@pulse.test", "password": "Strong-Pass-42", "display_name": "X"})
+    assert bad.status_code == 422 and bad.json()["error"]["fields"][0]["loc"][-1] == "email"

@@ -30,7 +30,7 @@ def models(db: Session = Depends(get_db)):
             "dataset_start": m.dataset_start.isoformat() if m.dataset_start else None,
             "dataset_end": m.dataset_end.isoformat() if m.dataset_end else None,
             "splits": m.splits, "notes": m.notes,
-            "metrics": [{"split": e.split, "horizon": e.horizon, "metric": e.metric, "value": round(e.value, 4), "n": e.n_samples} for e in evals],
+            "metrics": [{"split": e.split, "horizon": e.horizon, "candidate": e.candidate, "metric": e.metric, "value": round(e.value, 4), "n": e.n_samples} for e in evals],
         })
     active = [m for m in out if m["status"] == "active" and m["task"] == SEGMENT_TASK]
     return {

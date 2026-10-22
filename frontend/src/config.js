@@ -1,22 +1,25 @@
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+// Runtime configuration (CRA bakes REACT_APP_* in at build time).
+export const API_BASE_URL = (process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
-export const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL || DEFAULT_API_BASE_URL;
+// OpenStreetMap standard tiles: free for light use with attribution
+// (https://operations.osmfoundation.org/policies/tiles/). Override for heavier use.
+export const TILE_URL = process.env.REACT_APP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+export const TILE_ATTRIBUTION =
+  process.env.REACT_APP_TILE_ATTRIBUTION ||
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
-export const LOCATIONS = [
-  "Marathahalli Bridge",
-  "Silk Board",
-  "KR Puram",
-  "Hebbal",
-  "Whitefield",
-  "Electronic City",
+export const BENGALURU_CENTER = [12.9716, 77.5946];
+export const BENGALURU_BOUNDS = [
+  [12.7, 77.3],
+  [13.3, 77.95],
 ];
 
-export const WEATHER_OPTIONS = ["Sunny", "Cloudy", "Rainy"];
+export const ROUTE_COLORS = ["#2563eb", "#9333ea", "#0d9488", "#ea580c", "#db2777", "#4b5563"];
 
-export const STATUS_COLORS = {
-  LOW: "#00ff99",
-  MODERATE: "#ffcc00",
-  HIGH: "#ff8800",
-  SEVERE: "#ff3333",
+export const CONGESTION_COLORS = {
+  FREE: "#16a34a",
+  MODERATE: "#ca8a04",
+  HEAVY: "#ea580c",
+  SEVERE: "#dc2626",
+  CLOSED: "#7f1d1d",
 };

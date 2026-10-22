@@ -114,7 +114,7 @@ def explain(opt, cand, options, pref: RoutePreference, basis: str) -> List[str]:
         severe = [i for i in opt.incidents if (i.severity or 0) >= 3 or i.category == "road_closed"]
         sample = opt.incidents[0]
         lines.append(
-            f"{len(opt.incidents)} active incident(s) within 60 m"
+            f"{len(opt.incidents)} active incident(s) on this route"
             + (f", {len(severe)} major/closure" if severe else "")
             + f" — e.g. {sample.category.replace('_', ' ')}"
             + (f" on {sample.road}" if sample.road else "")

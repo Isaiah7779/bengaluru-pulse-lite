@@ -162,7 +162,7 @@ def models(db: Session = Depends(get_db)):
             "id": m.id, "name": m.name, "version": m.version, "task": m.task, "algorithm": m.algorithm,
             "status": m.status, "dataset": m.dataset, "splits": m.splits, "params": m.params,
             "notes": m.notes, "created_at": m.created_at.isoformat() if m.created_at else None,
-            "evaluations": [{"split": e.split, "horizon": e.horizon, "metric": e.metric, "value": e.value, "n": e.n_samples} for e in evals],
+            "evaluations": [{"split": e.split, "horizon": e.horizon, "candidate": e.candidate, "metric": e.metric, "value": e.value, "n": e.n_samples} for e in evals],
         })
     return {"models": out}
 

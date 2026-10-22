@@ -161,3 +161,22 @@ def test_corridors_scale_with_trip_length():
     assert short == []
     long = corridor_waypoints(*O, *D)
     assert len(long) == 10
+
+
+class _Inc:
+    def __init__(self, geometry=None, lat=0.0, lon=0.0):
+        self.geometry, self.lat, self.lon = geometry, lat, lon
+
+
+def test_incidents_must_run_along_the_route_not_cross_it():
+    from routing.engine import incident_on_route
+    from routing.geometry import PointIndex, resample
+
+    route = straight((12.90, 77.60), (12.90, 77.62), n=50)  # east-west road
+    index = PointIndex(resample(route, 10.0), cell_m=60.0)
+    along = {"type": "LineString", "coordinates": straight((12.90, 77.605), (12.90, 77.607), n=10)}
+    crossing = {"type": "LineString", "coordinates": straight((12.895, 77.61), (12.9001, 77.61), n=10)}  # side street touching it
+    assert incident_on_route(_Inc(along), index)[0] is True
+    assert incident_on_route(_Inc(crossing), index)[0] is False
+    assert incident_on_route(_Inc(None, 12.90001, 77.611), index)[0] is True  # point on the road
+    assert incident_on_route(_Inc(None, 12.9005, 77.611), index)[0] is False  # ~55 m away

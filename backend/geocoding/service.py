@@ -125,7 +125,9 @@ def search_local(
 
     out, seen = [], set()
     for score, distance, p in ranked:
-        key = (p.name_normalized, round(p.lat, 3), round(p.lon, 3))
+        # Localities are often mapped as several nodes; merge same-name ones within ~1 km.
+        precision = 2 if p.category == "locality" else 3
+        key = (p.name_normalized, p.category == "locality", round(p.lat, precision), round(p.lon, precision))
         if key in seen:
             continue
         seen.add(key)

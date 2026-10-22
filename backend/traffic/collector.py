@@ -139,8 +139,41 @@ async def run_once(settings: Settings) -> dict:
     return results
 
 
+def _seconds_since_last(model, column) -> Optional[float]:
+    from datetime import datetime, timezone
+
+    from sqlalchemy import func, select
+
+    from db.models import as_utc
+
+    with session_scope() as session:
+        last = as_utc(session.scalar(select(func.max(column))))
+    return (datetime.now(timezone.utc) - last).total_seconds() if last else None
+
+
+def resume_schedule(tasks: list[Task]) -> None:
+    """Continue the previous schedule after a restart instead of re-polling at once
+    (each flow sweep costs one TomTom call per monitored point)."""
+
+    from db.models import Incident, TrafficObservation, WeatherObservation
+
+    last = {
+        "flow": _seconds_since_last(TrafficObservation, TrafficObservation.ingested_at),
+        "weather": _seconds_since_last(WeatherObservation, WeatherObservation.ingested_at),
+        "incidents": _seconds_since_last(Incident, Incident.last_seen_at),
+    }
+    for task in tasks:
+        age = last.get(task.name)
+        if age is not None and age < task.interval_s:
+            task.next_run = time.monotonic() + (task.interval_s - age)
+
+
 async def run_forever(settings: Settings) -> None:
     tasks = build_tasks(settings)
+    try:
+        resume_schedule(tasks)
+    except Exception:
+        logger.exception("Could not resume schedule; polling immediately")
     logger.info("Collector started: %s", {t.name: t.interval_s for t in tasks})
     while True:
         now = time.monotonic()

@@ -48,7 +48,9 @@ class RegisterIn(BaseModel):
 
 
 class LoginIn(BaseModel):
-    email: EmailStr
+    # Not EmailStr: sign-in must work for any stored address (e.g. bootstrap admins
+    # on reserved domains); format is validated at registration.
+    email: str = Field(..., min_length=3, max_length=254)
     password: str = Field(..., max_length=200)
 
 

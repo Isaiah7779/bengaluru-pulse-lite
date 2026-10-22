@@ -64,7 +64,10 @@ FUTURE_THRESHOLD = timedelta(minutes=15)
 MAX_DEPART_AHEAD = timedelta(days=7)
 DUPLICATE_SIMILARITY = 0.85
 MAX_BACKTRACK_M = 120.0
-INCIDENT_RADIUS_M = 60.0
+INCIDENT_POINT_RADIUS_M = 25.0  # point incidents must sit on the route
+INCIDENT_LINE_RADIUS_M = 20.0  # line incidents must run along the route...
+INCIDENT_MIN_OVERLAP = 0.5  # ...for at least half their length
+INCIDENT_MIN_OVERLAP_M = 60.0  # ...or at least 60 m of it
 SEGMENT_RADIUS_M = 120.0
 # Incident types that matter to pedestrians/cyclists (traffic jams do not).
 NON_MOTOR_INCIDENTS = {"road_closed", "flooding", "road_works", "dangerous_conditions", "accident"}
@@ -124,6 +127,31 @@ def corridor_waypoints(o_lat: float, o_lon: float, d_lat: float, d_lon: float) -
     for side in (1, -1):
         corridors.append([point(0.5, side * min(max(0.18 * span_m, 300.0), 6_000.0))])
     return corridors
+
+
+def incident_on_route(inc, route_index: PointIndex) -> Tuple[bool, float]:
+    """Whether an incident lies *on* the route (not merely on a crossing street).
+
+    Line incidents (jams, closures) are resampled every 10 m; they count as on
+    the route when at least half of them, or 60 m, lies within 20 m of it.
+    """
+
+    geom = inc.geometry or {}
+    coords = geom.get("coordinates") if geom.get("type") == "LineString" else None
+    if coords and len(coords) >= 2:
+        samples = resample(coords, 10.0)
+        near = 0
+        best = math.inf
+        for p in samples:
+            d = min((haversine_m(p, q) for q in route_index.neighbours(p[0], p[1], INCIDENT_LINE_RADIUS_M)), default=math.inf)
+            best = min(best, d)
+            if d <= INCIDENT_LINE_RADIUS_M:
+                near += 1
+        overlap_m = near * 10.0
+        return (near / len(samples) >= INCIDENT_MIN_OVERLAP or overlap_m >= INCIDENT_MIN_OVERLAP_M), best
+    p = (inc.lon, inc.lat)
+    best = min((haversine_m(p, q) for q in route_index.neighbours(p[0], p[1], INCIDENT_POINT_RADIUS_M)), default=math.inf)
+    return best <= INCIDENT_POINT_RADIUS_M, best
 
 
 def clean_steps(raw_steps: List[Dict[str, Any]]) -> List[RouteStep]:
@@ -237,6 +265,15 @@ class RoutingEngine:
         if any(s > 500 for s in snap):
             warnings.append(
                 f"Origin/destination snapped {max(snap):.0f} m to the nearest {profile.vehicle}-accessible road."
+            )
+
+        straight_m = haversine_m((o[1], o[0]), (d[1], d[0]))
+        primary_m = float(primary["routes"][0].get("distance") or 0)
+        if straight_m > 3000 and primary_m > 1.8 * straight_m:
+            warnings.append(
+                f"The best {profile.vehicle} route is {primary_m / 1000:.1f} km for a {straight_m / 1000:.1f} km straight-line trip. "
+                "A point on a flyover, expressway or one-way road can only be reached via a distant ramp or turn; "
+                "choosing a nearby place may give a more practical route."
             )
 
         candidates: List[Candidate] = []
@@ -416,7 +453,7 @@ class RoutingEngine:
 
     # ------------------------------------------------------------------
     def _route_index(self, c: Candidate) -> Tuple[PointIndex, Tuple[float, float, float, float]]:
-        samples = resample(c.coords, 30.0)
+        samples = resample(c.coords, 10.0)
         lons = [p[0] for p in samples]
         lats = [p[1] for p in samples]
         return PointIndex(samples, cell_m=60.0), (min(lons), min(lats), max(lons), max(lats))
@@ -439,15 +476,8 @@ class RoutingEngine:
                     if not motor and inc.category not in NON_MOTOR_INCIDENTS:
                         continue
                     last_sweep = max(filter(None, [last_sweep, _aware(inc.last_seen_at)]), default=None)
-                    points = [(inc.lon, inc.lat)]
-                    geom = inc.geometry or {}
-                    if geom.get("type") == "LineString":
-                        points = [tuple(p) for p in geom.get("coordinates", [])][::3] or points
-                    best = min(
-                        (haversine_m(p, q) for p in points for q in index.neighbours(p[0], p[1], INCIDENT_RADIUS_M)),
-                        default=math.inf,
-                    )
-                    if best <= INCIDENT_RADIUS_M:
+                    on_route, best = incident_on_route(inc, index)
+                    if on_route:
                         c.incidents.append(
                             RouteIncident(
                                 id=inc.id, category=inc.category, severity=inc.severity,
