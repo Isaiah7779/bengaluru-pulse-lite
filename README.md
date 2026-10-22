@@ -277,9 +277,9 @@ MIT License — Free to use and modify
 ## 📞 Contact
 
 For questions, collaborations, or feedback:
-- **Email**: your.email@example.com
-- **GitHub**: github.com/yourusername
-- **LinkedIn**: linkedin.com/in/yourusername
+- **Email**: crjordan436@gmail.com
+- **GitHub**: github.com/Isaiah7779
+- **LinkedIn**: Isaiah Melvin Issac
 
 ---
 
