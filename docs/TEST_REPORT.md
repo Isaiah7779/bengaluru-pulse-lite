@@ -235,3 +235,31 @@ documentation files (verified by comparing every non-`docs/` member byte for byt
 Not run from the archive: `docker compose up --build` (port collision with the running stack;
 road graphs not included) and native mobile builds (the Android APK was built from the
 working tree, which has identical mobile source).
+
+## Firebase authentication and personal data (22 Oct 2026, 18:00–19:30 IST)
+
+Run against code at commits `2f9d7a9`…`715d84e`. No real Firebase project existed yet, so
+end-to-end checks used the **Firebase Emulator Suite** (Auth + Firestore,
+firebase-tools 13.35.1, JDK 17). They ran against a separate backend on port 8001 and a
+scratch database (`pulse_e2e`, dropped afterwards). The deployed stack was not changed.
+
+| Check | Result |
+|---|---|
+| Backend unit tests (`pytest -q`) | **134 passed** (115 existing + 19 new in `test_firebase_auth.py`): real RS256 tokens through the Firebase Admin SDK; forged-key, wrong-audience, wrong-issuer, empty-subject, expired and unsigned tokens rejected; unverified e-mail → 403; token "admin" claims ignored; no automatic e-mail linking; explicit link needs the old password and keeps ID/role/trips; per-user isolation; recent-sign-in deletion |
+| Migration 0003 on a scratch PostGIS database | upgrade → downgrade → upgrade clean |
+| Firestore rules on the emulator (`npm run test:rules`) | **7 passed** (ownership, cross-user denial, anonymous/unverified denial, no role/profile docs, field validation, immutable `createdAt`, preferences doc) |
+| Frontend tests | **15 passed** (8 new: sign-in gate, destination kept, Firebase verification screen, ID token on requests, linking, wrong password keeps session, token refresh) |
+| Frontend production build | compiled, no warnings; Firebase SDK in lazy chunks (main +8 kB) |
+| Mobile `tsc --noEmit` / `expo-doctor` / Android bundle | 0 errors / 20 of 20 / exported (React Native auth build resolved) |
+| API end to end via Auth emulator | **12/12**: anonymous 401, `/health` public, unverified 403, verification via emulator link, user role, admin API 403, route planning (3 routes, free-flow; TomTom disabled to avoid quota), trip saved, user B cannot list or open user A's trip, foreign-project token 401 |
+| Web UI end to end (browser) | registration → verification screen ("Not verified yet" before the link) → verified → lands on requested `#/traffic`; session survives reload; Firestore favourite, journal entry and preferences saved; planner applied preferences and showed the saved-place chip; sign-out; existing-account e-mail → link screen; wrong old password shows an error (bug found and fixed: it previously signed the user out); correct password → admin role kept, lands on `#/admin` |
+| Google provider | emulator `signInWithIdp`: verified Google e-mail → normal user; unverified → 403. The in-app test browser cannot host OAuth popups, so the web popup and native Android Google sign-in are **not yet verified** (need a real project) |
+| Backend Docker image | builds with firebase-admin; inside the container the SDK fetched Google's real signing certificates and rejected a forged token |
+| Android release signing | new upload key (PKCS12, RSA 4096); verification `assembleRelease` succeeded; `apksigner` shows signer `CN=Bengaluru Pulse`, SHA-1 `41:1B:2F:…:B7:3A`, SHA-256 `9C:BF:65:…:F8:A1`; package `org.bengalurupulse.app`. This was a check only: no Firebase config, not copied to `dist/` |
+
+**Not verified yet** (needs the real Firebase project):
+
+* real verification and reset e-mails;
+* Google sign-in on the web and on Android;
+* rules deployed to production Firestore;
+* the deployed stack running with `FIREBASE_PROJECT_ID`.
