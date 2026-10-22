@@ -127,3 +127,19 @@ model listed as *candidate* with measured MAEs) → traffic page at 375 px width
 * GitHub Actions runs (not pushed); public deployment (no hosting account).
 * Mobile app on a physical device or emulator (no AVD configured; APK built only).
 * Load/performance testing beyond single-user latency.
+
+## External access and mobile configuration (22 Oct 2026, 09:40–10:00 UTC)
+
+| Check | Exact outcome |
+|---|---|
+| Docker services | 7 up; backend, OSRM ×3, Postgres healthy; collector 0 restarts |
+| Local web/API | `localhost:8080` 200; `/api/health/ready` all `ok` |
+| LAN binding | `http://192.168.1.7:8080` and `/api/health` → 200 from the laptop; 8000, 5433, 5000 on the LAN address refused (bound to 127.0.0.1) |
+| Cloudflare quick tunnel | `cloudflared` 2026.10.3 (already installed, not on PATH) connected via `bom09` |
+| Through the public HTTPS URL | page 200; readiness all `ok`; search "phoenix market" → Phoenix Market City; car route Koramangala → Hebbal on `traffic_live`, 3 routes; `GET /api/v1/admin/users` without token → 401 |
+| Frontend → backend via tunnel (browser) | Traffic page issued 4 API calls, all 200; rendered 26/26 points fresh, 338 incidents |
+| Mobile TypeScript | `npx tsc --noEmit` → 0 errors |
+| Expo diagnostics | `npx expo-doctor` → 20/20 checks passed |
+| Mobile iOS bundle | `npx expo export --platform ios` with the tunnel URL → bundled 640 modules; URL present once; 0 of 5 backend secrets present |
+| Expo dev server (`--lan`) | manifest for iOS: `exposdk:58.0.0`, `hostUri 192.168.1.7:8081` |
+| Physical iPhone | **not tested** (App Store Expo Go does not yet support SDK 58; LAN/tunnel URL in Safari awaits a manual test) |

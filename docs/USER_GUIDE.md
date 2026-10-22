@@ -83,6 +83,6 @@ Forecast logging results (prediction vs actual) are available to administrators 
 
 ## 6. Mobile app (development build)
 
-See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md#mobile-app). The mobile app offers
+See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md#9-mobile-app). The mobile app offers
 Navigate, Traffic and Account (sign-in, trip history, GPS trip recording,
 incident reports) on the same backend.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { api } from "../api";
+import { api, API_BASE_SOURCE, API_BASE_URL } from "../api";
 import { colors, ErrorBox } from "../ui";
 
 type Segment = {
@@ -46,6 +46,7 @@ export default function TrafficScreen() {
       ListHeaderComponent={
         <View>
           {error && <ErrorBox text={error} />}
+          <Text style={styles.muted}>Server: {API_BASE_URL} ({API_BASE_SOURCE})</Text>
           <Text style={styles.muted}>{note}</Text>
           <Text style={styles.stat}>{incidents ?? "–"} active incidents (TomTom)</Text>
         </View>

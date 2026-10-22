@@ -1,9 +1,28 @@
+import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 
-// EXPO_PUBLIC_* variables are inlined at build time. On a phone, "localhost"
-// is the phone itself: set EXPO_PUBLIC_API_BASE_URL to the machine's LAN IP or
-// the public API URL.
-export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL || "http://10.0.2.2:8000").replace(/\/$/, "");
+// Backend base URL, in priority order:
+// 1. EXPO_PUBLIC_API_BASE_URL (inlined at bundle time) — e.g. the HTTPS tunnel
+//    "https://<name>.trycloudflare.com/api" or a deployed host. Not a secret.
+// 2. Development: the laptop's LAN address that the Expo dev server runs on
+//    (Constants.expoConfig.hostUri, e.g. "192.168.1.7:8081"), reaching the API
+//    through the web app's nginx on port 8080 under /api — port 8000 is
+//    deliberately not exposed on the network.
+// 3. Android emulator alias for the host machine.
+// "localhost" is never used: on a phone it is the phone itself.
+function resolveApiBaseUrl(): { url: string; source: string } {
+  const configured = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (configured) return { url: configured, source: "EXPO_PUBLIC_API_BASE_URL" };
+  const host = Constants.expoConfig?.hostUri?.split(":")[0];
+  if (host && host !== "localhost" && host !== "127.0.0.1") {
+    return { url: `http://${host}:8080/api`, source: "Expo dev server LAN host" };
+  }
+  return { url: "http://10.0.2.2:8080/api", source: "Android emulator default" };
+}
+
+const resolved = resolveApiBaseUrl();
+export const API_BASE_URL = resolved.url.replace(/\/$/, "");
+export const API_BASE_SOURCE = resolved.source;
 
 const TOKEN_KEY = "pulse_token";
 let token: string | null = null;
