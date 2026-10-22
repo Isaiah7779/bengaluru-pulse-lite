@@ -29,10 +29,10 @@ function SegmentHistory({ segment }) {
           <Tooltip
             labelFormatter={(t) => clock(new Date(t).toISOString())}
             formatter={(v, n) => (n === "ratio" ? [`${v}% of free-flow`, "Speed"] : [v, n])}
-            contentStyle={{ background: "#17131C", border: "none", borderRadius: 10, color: "#FCF8F1", fontSize: 12 }}
-            itemStyle={{ color: "#FCF8F1" }}
+            contentStyle={{ background: "#171419", border: "none", borderRadius: 10, color: "#FBF7F1", fontSize: 12 }}
+            itemStyle={{ color: "#FBF7F1" }}
           />
-          <Line type="monotone" dataKey="ratio" stroke="#6338D8" dot={false} strokeWidth={2.5} isAnimationActive={false} />
+          <Line type="monotone" dataKey="ratio" stroke="#5925B5" dot={false} strokeWidth={2.5} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
       <div className="muted small">Collected TomTom observations, last 72 h ({data.length} points). Dashed line = free-flow speed.</div>

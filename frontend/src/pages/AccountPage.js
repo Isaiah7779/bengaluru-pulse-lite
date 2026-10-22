@@ -670,7 +670,15 @@ export default function AccountPage() {
   const Active = (TABS.find((t) => t[0] === tab) || TABS[0])[2];
   return (
     <div className="page">
-      <h2>My account</h2>
+      <header className="page-head">
+        <div>
+          <p className="eyebrow">Your Bengaluru Pulse</p>
+          <h2 className="page-title">
+            My <em>account</em>
+          </h2>
+        </div>
+        <p className="page-lede">Trips, places, notes and preferences. Only you can see them.</p>
+      </header>
       <div className="tabs" role="tablist">
         {TABS.map(([key, label]) => (
           <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>
@@ -678,7 +686,7 @@ export default function AccountPage() {
           </button>
         ))}
       </div>
-      <div role="tabpanel">
+      <div role="tabpanel" className="panel tab-panel">
         <Active />
       </div>
     </div>

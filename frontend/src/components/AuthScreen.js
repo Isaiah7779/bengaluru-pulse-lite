@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
-import CityArt from "./CityArt";
+import HeroArt from "./HeroArt";
 import Icon from "./Icons";
 
 function GoogleMark() {
@@ -255,7 +255,7 @@ export default function AuthScreen() {
   return (
     <main className="auth-page">
       <section className="auth-art" aria-hidden="true">
-        <CityArt />
+        <HeroArt />
         <div className="auth-art-copy">
           <span className="rail-mark">
             <span>B</span>

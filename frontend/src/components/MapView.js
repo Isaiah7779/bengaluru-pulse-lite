@@ -1,10 +1,12 @@
 import { useEffect } from "react";
-import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap, useMapEvents, ZoomControl } from "react-leaflet";
 import { BENGALURU_BOUNDS, BENGALURU_CENTER, CONGESTION_COLORS, TILE_ATTRIBUTION, TILE_URL } from "../config";
 
 const toLatLng = (coords) => coords.map(([lon, lat]) => [lat, lon]);
-const SELECTED = "#6338D8";
-const ALTERNATE = "#302039";
+const SELECTED = "#5925B5"; // vivid violet
+const ALTERNATE = "#30152F"; // deep plum
+const ORANGE = "#F47735";
+const CREAM = "#FBF7F1";
 const shortLabel = (p) => (p.label || "").split(",")[0];
 
 function ClickPicker({ onPick }) {
@@ -16,25 +18,25 @@ function ClickPicker({ onPick }) {
   return null;
 }
 
-function FitTo({ routes, selectedId, origin, destination }) {
+function FitTo({ routes, selectedId, origin, destination, padLeft }) {
   const map = useMap();
   useEffect(() => {
     const route = routes.find((r) => r.id === selectedId) || routes[0];
     if (route) {
-      map.fitBounds(toLatLng(route.geometry.coordinates), { padding: [40, 40] });
+      map.fitBounds(toLatLng(route.geometry.coordinates), { paddingTopLeft: [padLeft, 60], paddingBottomRight: [40, 60] });
     } else if (origin && destination) {
       map.fitBounds(
         [
           [origin.lat, origin.lon],
           [destination.lat, destination.lon],
         ],
-        { padding: [60, 60] }
+        { paddingTopLeft: [padLeft + 20, 80], paddingBottomRight: [60, 60] }
       );
     } else if (origin || destination) {
       const p = origin || destination;
       map.setView([p.lat, p.lon], 14);
     }
-  }, [map, routes, selectedId, origin, destination]);
+  }, [map, routes, selectedId, origin, destination, padLeft]);
   return null;
 }
 
@@ -49,6 +51,7 @@ export default function MapView({
   segments = [],
   incidents = [],
   shortcuts = [],
+  fitPaddingLeft = 40,
 }) {
   const selected = routes.find((r) => r.id === selectedId);
   return (
@@ -62,10 +65,12 @@ export default function MapView({
         [13.6, 78.3],
       ]}
       bounds={BENGALURU_BOUNDS}
+      zoomControl={false}
     >
+      <ZoomControl position="topright" />
       <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} maxZoom={19} />
       <ClickPicker onPick={picking ? onPick : null} />
-      <FitTo routes={routes} selectedId={selectedId} origin={origin} destination={destination} />
+      <FitTo routes={routes} selectedId={selectedId} origin={origin} destination={destination} padLeft={fitPaddingLeft} />
 
       {segments.map((s) =>
         s.observation && s.geometry ? (
@@ -103,7 +108,8 @@ export default function MapView({
         ))}
       {selected && (
         <>
-          <Polyline positions={toLatLng(selected.geometry.coordinates)} pathOptions={{ color: "#FCF8F1", weight: 11, opacity: 0.95 }} />
+          <Polyline positions={toLatLng(selected.geometry.coordinates)} pathOptions={{ color: ALTERNATE, weight: 13, opacity: 0.18 }} />
+          <Polyline positions={toLatLng(selected.geometry.coordinates)} pathOptions={{ color: CREAM, weight: 10, opacity: 0.95 }} />
           <Polyline positions={toLatLng(selected.geometry.coordinates)} pathOptions={{ color: SELECTED, weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }} />
           {selected.incidents.map((i) => (
             <CircleMarker
@@ -136,7 +142,7 @@ export default function MapView({
       ))}
 
       {shortcuts.map((s) => (
-        <Polyline key={`sc-${s.id}`} positions={toLatLng(s.geometry.coordinates)} pathOptions={{ color: "#0891b2", weight: 4, dashArray: "2 8" }}>
+        <Polyline key={`sc-${s.id}`} positions={toLatLng(s.geometry.coordinates)} pathOptions={{ color: ORANGE, weight: 4, dashArray: "2 8" }}>
           <Tooltip sticky>
             Verified community {s.classification} ({s.confirmations} confirmations)
           </Tooltip>
@@ -144,14 +150,14 @@ export default function MapView({
       ))}
 
       {origin && (
-        <CircleMarker center={[origin.lat, origin.lon]} radius={9} pathOptions={{ color: "#FCF8F1", weight: 3, fillColor: "#17131C", fillOpacity: 1 }}>
+        <CircleMarker center={[origin.lat, origin.lon]} radius={9} pathOptions={{ color: CREAM, weight: 3, fillColor: SELECTED, fillOpacity: 1 }}>
           <Tooltip permanent direction="top" offset={[0, -8]} className="pin-label">
             <b>A</b> {shortLabel(origin)}
           </Tooltip>
         </CircleMarker>
       )}
       {destination && (
-        <CircleMarker center={[destination.lat, destination.lon]} radius={9} pathOptions={{ color: "#FCF8F1", weight: 3, fillColor: "#FF702E", fillOpacity: 1 }}>
+        <CircleMarker center={[destination.lat, destination.lon]} radius={9} pathOptions={{ color: CREAM, weight: 3, fillColor: ORANGE, fillOpacity: 1 }}>
           <Tooltip permanent direction="top" offset={[0, -8]} className="pin-label">
             <b>B</b> {shortLabel(destination)}
           </Tooltip>

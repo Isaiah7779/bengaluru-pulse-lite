@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import HeroArt from "../components/HeroArt";
 import Icon from "../components/Icons";
 import InsightStrip from "../components/InsightStrip";
 import MapView from "../components/MapView";
@@ -22,6 +23,21 @@ const LAYERS = [
   ["incidents", "Incidents"],
   ["shortcuts", "Verified shortcuts"],
 ];
+
+// Wide screens dock the planner over the map; narrower ones stack it below the map.
+const DOCKED_QUERY = "(min-width: 1200px)";
+function useDocked() {
+  const get = () => Boolean(window.matchMedia && window.matchMedia(DOCKED_QUERY).matches);
+  const [docked, setDocked] = useState(get);
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const mq = window.matchMedia(DOCKED_QUERY);
+    const on = () => setDocked(mq.matches);
+    mq.addEventListener ? mq.addEventListener("change", on) : mq.addListener(on);
+    return () => (mq.removeEventListener ? mq.removeEventListener("change", on) : mq.removeListener(on));
+  }, []);
+  return docked;
+}
 
 function localInputValue(date) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -50,6 +66,7 @@ export default function NavigatePage() {
   const [shortcuts, setShortcuts] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const pendingAvoid = useRef(null);
+  const docked = useDocked();
 
   // Personal defaults and saved places (Firestore) for Firebase accounts.
   useEffect(() => {
@@ -141,9 +158,11 @@ export default function NavigatePage() {
       const res = await api("/v1/routes", { method: "POST", body });
       setResult(res);
       setSelectedId(res.recommended_route_id);
-      // On narrow screens the results sit below the map and form: bring them into view.
-      if (window.matchMedia && window.matchMedia("(max-width: 960px)").matches) {
+      // Docked: results appear inside the floating panel. Stacked: bring them into view.
+      if (!docked) {
         setTimeout(() => document.querySelector(".results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+      } else {
+        setTimeout(() => document.querySelector(".planner-dock")?.scrollTo({ top: document.querySelector(".planner")?.offsetHeight || 0, behavior: "smooth" }), 50);
       }
     } catch (err) {
       setResult(null);
@@ -164,15 +183,80 @@ export default function NavigatePage() {
   return (
     <div className="nav-page">
       <section className="nav-stage">
-        <div className="nav-left">
+        <div className="nav-hero">
           <header className="hero">
             <p className="eyebrow">Bengaluru · Live city navigation</p>
             <h1 className="hero-title">
               Move smarter. <em>Bengaluru.</em>
             </h1>
             <p className="hero-copy">Live traffic. Smarter routes. Clearer decisions. A calmer city, together.</p>
+            <ul className="hero-tags" aria-label="What Bengaluru Pulse uses">
+              <li>OSRM routes</li>
+              <li>TomTom traffic</li>
+              <li>Open-Meteo weather</li>
+            </ul>
           </header>
+          <HeroArt />
+        </div>
 
+        <div className={`nav-map ${docked ? "is-docked" : ""}`}>
+          <div className="map-frame">
+            <MapView
+              routes={result ? result.routes : []}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              origin={origin}
+              destination={destination}
+              picking={picking}
+              onPick={onPick}
+              segments={layers.traffic ? segments : []}
+              incidents={layers.incidents ? incidents : []}
+              shortcuts={layers.shortcuts ? shortcuts : []}
+              fitPaddingLeft={docked ? 420 : 40}
+            />
+            <div className="map-layers" aria-label="Map layers">
+              <Icon name="layers" size={16} />
+              {LAYERS.map(([key, label]) => (
+                <label key={key} className={`layer-pill ${layers[key] ? "on" : ""}`}>
+                  <input type="checkbox" checked={layers[key]} onChange={(e) => setLayers((l) => ({ ...l, [key]: e.target.checked }))} /> {label}
+                </label>
+              ))}
+            </div>
+            {(result || layers.traffic || layers.incidents) && (
+              <div className="map-legend" aria-label="Map legend">
+                {result && (
+                  <span>
+                    <i className="lg-line lg-selected" /> Selected route
+                  </span>
+                )}
+                {result && result.routes.length > 1 && (
+                  <span>
+                    <i className="lg-line lg-alt" /> Alternatives
+                  </span>
+                )}
+                {layers.traffic && (
+                  <>
+                    <span>
+                      <i className="lg-dot sev-free" /> Free
+                    </span>
+                    <span>
+                      <i className="lg-dot sev-moderate" /> Moderate
+                    </span>
+                    <span>
+                      <i className="lg-dot sev-heavy" /> Heavy
+                    </span>
+                  </>
+                )}
+                {layers.incidents && (
+                  <span>
+                    <i className="lg-dot sev-severe" /> Incident
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="planner-dock">
           <form onSubmit={plan} className="route-form planner" aria-label="Plan a route">
             <div className="planner-head">
               <span className="eyebrow">Plan a journey</span>
@@ -320,61 +404,7 @@ export default function NavigatePage() {
               simulated.
             </p>
           )}
-        </div>
-
-        <div className="nav-map">
-          <MapView
-            routes={result ? result.routes : []}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            origin={origin}
-            destination={destination}
-            picking={picking}
-            onPick={onPick}
-            segments={layers.traffic ? segments : []}
-            incidents={layers.incidents ? incidents : []}
-            shortcuts={layers.shortcuts ? shortcuts : []}
-          />
-          <div className="map-layers" aria-label="Map layers">
-            <Icon name="layers" size={16} />
-            {LAYERS.map(([key, label]) => (
-              <label key={key} className={`layer-pill ${layers[key] ? "on" : ""}`}>
-                <input type="checkbox" checked={layers[key]} onChange={(e) => setLayers((l) => ({ ...l, [key]: e.target.checked }))} /> {label}
-              </label>
-            ))}
           </div>
-          {(result || layers.traffic || layers.incidents) && (
-          <div className="map-legend" aria-label="Map legend">
-            {result && (
-              <span>
-                <i className="lg-line lg-selected" /> Selected route
-              </span>
-            )}
-            {result && result.routes.length > 1 && (
-              <span>
-                <i className="lg-line lg-alt" /> Alternatives
-              </span>
-            )}
-            {layers.traffic && (
-              <>
-                <span>
-                  <i className="lg-dot sev-free" /> Free
-                </span>
-                <span>
-                  <i className="lg-dot sev-moderate" /> Moderate
-                </span>
-                <span>
-                  <i className="lg-dot sev-heavy" /> Heavy
-                </span>
-              </>
-            )}
-            {layers.incidents && (
-              <span>
-                <i className="lg-dot sev-severe" /> Incident
-              </span>
-            )}
-          </div>
-          )}
         </div>
       </section>
 

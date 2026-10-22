@@ -239,7 +239,15 @@ export default function AdminPage() {
   const Active = TABS.find((t) => t[0] === tab)[2];
   return (
     <div className="page">
-      <h2>Administration</h2>
+      <header className="page-head">
+        <div>
+          <p className="eyebrow">Restricted · administrators only</p>
+          <h2 className="page-title">
+            Administration
+          </h2>
+        </div>
+        <p className="page-lede">Health, data freshness, moderation and accounts. Every action is checked on the server and audit-logged.</p>
+      </header>
       <div className="tabs" role="tablist">
         {TABS.map(([key, label]) => (
           <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>
@@ -247,7 +255,7 @@ export default function AdminPage() {
           </button>
         ))}
       </div>
-      <div role="tabpanel">
+      <div role="tabpanel" className="panel tab-panel">
         <Active />
       </div>
     </div>
