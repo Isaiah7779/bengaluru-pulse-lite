@@ -5,7 +5,7 @@ import "@fontsource/dm-serif-display/400-italic.css";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
-import AuthDialog from "./components/AuthDialog";
+import AuthScreen from "./components/AuthScreen";
 import Icon from "./components/Icons";
 import AccountPage from "./pages/AccountPage";
 import AdminPage from "./pages/AdminPage";
@@ -31,11 +31,14 @@ function useHashPage() {
 }
 
 function Shell() {
-  const { user, isAdmin, logout, loading } = useAuth();
+  const { user, isAdmin, logout, status } = useAuth();
   const [page, go] = useHashPage();
-  const [showAuth, setShowAuth] = useState(false);
 
-  const allowed = (p) => p === "navigate" || p === "traffic" || (p === "account" && user) || (p === "admin" && isAdmin);
+  // Every page needs a signed-in, verified account. The hash is left untouched while the
+  // sign-in screen shows, so the user lands on the page they were heading to.
+  if (status !== "ready" || !user) return <AuthScreen />;
+
+  const allowed = (p) => p === "navigate" || p === "traffic" || p === "account" || (p === "admin" && isAdmin);
   const current = PAGES[page] && allowed(page) ? page : "navigate";
 
   return (
@@ -67,28 +70,20 @@ function Shell() {
           </a>
           <span className="tagline">A calmer city tomorrow</span>
           <div className="user-area">
-            {loading ? null : user ? (
-              <>
-                <span className="who" title={user.email}>
-                  {user.display_name}
-                  {isAdmin && <span className="badge badge-admin">admin</span>}
-                </span>
-                <button
-                  className="ghost-btn"
-                  onClick={async () => {
-                    await logout();
-                    go("navigate");
-                  }}
-                >
-                  <Icon name="logout" size={18} />
-                  <span>Sign out</span>
-                </button>
-              </>
-            ) : (
-              <button className="primary small" onClick={() => setShowAuth(true)}>
-                Sign in
-              </button>
-            )}
+            <span className="who" title={user.email}>
+              {user.display_name}
+              {isAdmin && <span className="badge badge-admin">admin</span>}
+            </span>
+            <button
+              className="ghost-btn"
+              onClick={async () => {
+                await logout();
+                go("navigate");
+              }}
+            >
+              <Icon name="logout" size={18} />
+              <span>Sign out</span>
+            </button>
           </div>
         </header>
         <div className="page-host" key={current}>
@@ -98,7 +93,6 @@ function Shell() {
           {current === "admin" && <AdminPage />}
         </div>
       </div>
-      {showAuth && <AuthDialog onClose={() => setShowAuth(false)} />}
     </div>
   );
 }

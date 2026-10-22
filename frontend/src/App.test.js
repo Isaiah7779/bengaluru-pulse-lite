@@ -30,15 +30,33 @@ beforeEach(() => {
   window.location.hash = "";
 });
 
-test("anonymous users see navigation but no account or admin pages", async () => {
+const ME_USER = [200, { id: 2, email: "u@x.in", display_name: "Ravi", role: "user", created_at: "2026-10-01T00:00:00Z" }];
+
+test("anonymous visitors only see the sign-in screen", async () => {
   respond({ "/v1/vehicles": VEHICLES });
+  window.location.hash = "#/traffic";
   render(<App />);
-  expect(screen.getByText("Bengaluru Pulse")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Find routes" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Find routes" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Traffic" })).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("link", { name: "My account" })).not.toBeInTheDocument();
-  // An unavailable mode is disabled rather than silently served by another graph.
-  await waitFor(() => expect(screen.getByLabelText("Walk")).toBeDisabled());
+  // No Firebase config in this build: Google sign-in is not offered.
+  expect(screen.queryByRole("button", { name: /Google/ })).not.toBeInTheDocument();
+  expect(global.fetch).not.toHaveBeenCalled();
+});
+
+test("signing in opens the page the visitor asked for", async () => {
+  respond({
+    "/v1/vehicles": VEHICLES,
+    "POST /v1/auth/login": [200, { access_token: "tok", user: ME_USER[1] }],
+  });
+  window.location.hash = "#/account";
+  render(<App />);
+  fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "u@x.in" } });
+  fireEvent.change(screen.getByLabelText("Password"), { target: { value: "Correct-Horse-9" } });
+  fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+  expect(await screen.findByRole("heading", { name: "My account" })).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
 });
 
 test("admin link appears only for an admin user returned by the backend", async () => {
@@ -49,10 +67,20 @@ test("admin link appears only for an admin user returned by the backend", async 
 });
 
 test("route form requires both places", async () => {
-  respond({ "/v1/vehicles": VEHICLES });
+  setToken("t");
+  respond({ "/v1/vehicles": VEHICLES, "/v1/auth/me": ME_USER });
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "Find routes" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Find routes" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Choose both a start and a destination");
+  // An unavailable mode is disabled rather than silently served by another graph.
+  await waitFor(() => expect(screen.getByLabelText("Walk")).toBeDisabled());
+});
+
+test("an expired session returns to the sign-in screen", async () => {
+  setToken("old");
+  respond({ "/v1/auth/me": [401, { error: { code: "token_expired", message: "Session expired; please sign in again" } }] });
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
 });
 
 test("api client surfaces the server's safe error message", async () => {

@@ -125,16 +125,18 @@ export default function PlaceSearch({ label, value, onChange, onPickOnMap, picki
         <button type="button" className="icon-btn" title="Use my location" aria-label={`${label}: use my location`} onClick={useMyLocation}>
           ◎
         </button>
-        <button
-          type="button"
-          className={`icon-btn ${picking ? "active" : ""}`}
-          title="Pick on map"
-          aria-label={`${label}: pick on map`}
-          aria-pressed={Boolean(picking)}
-          onClick={onPickOnMap}
-        >
-          ⌖
-        </button>
+        {onPickOnMap && (
+          <button
+            type="button"
+            className={`icon-btn ${picking ? "active" : ""}`}
+            title="Pick on map"
+            aria-label={`${label}: pick on map`}
+            aria-pressed={Boolean(picking)}
+            onClick={onPickOnMap}
+          >
+            ⌖
+          </button>
+        )}
       </div>
       {busy && <div className="hint">Searching…</div>}
       {error && <div className="hint error">{error}</div>}

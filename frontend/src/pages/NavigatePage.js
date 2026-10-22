@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import Icon from "../components/Icons";
@@ -6,6 +6,7 @@ import InsightStrip from "../components/InsightStrip";
 import MapView from "../components/MapView";
 import PlaceSearch from "../components/PlaceSearch";
 import RouteResults from "../components/RouteResults";
+import * as personal from "../data/personal";
 
 const PREFERENCES = [
   ["fastest", "Fastest"],
@@ -28,7 +29,7 @@ function localInputValue(date) {
 }
 
 export default function NavigatePage() {
-  const { user } = useAuth();
+  const { user, mode } = useAuth();
   const [origin, setOrigin] = useState(null);
   const [destination, setDestination] = useState(null);
   const [vehicles, setVehicles] = useState([]);
@@ -47,6 +48,23 @@ export default function NavigatePage() {
   const [segments, setSegments] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [shortcuts, setShortcuts] = useState([]);
+  const [favorites, setFavorites] = useState([]);
+  const pendingAvoid = useRef(null);
+
+  // Personal defaults and saved places (Firestore) for Firebase accounts.
+  useEffect(() => {
+    if (mode !== "firebase") return;
+    personal
+      .getPreferences()
+      .then((p) => {
+        if (!p) return;
+        if (p.vehicle) setVehicle(p.vehicle);
+        if (p.routePreference) setPreference(p.routePreference);
+        if (p.avoid) pendingAvoid.current = p.avoid;
+      })
+      .catch(() => {});
+    personal.listFavorites().then(setFavorites).catch(() => setFavorites([]));
+  }, [mode]);
 
   useEffect(() => {
     api("/v1/vehicles")
@@ -68,8 +86,20 @@ export default function NavigatePage() {
   const avoidOptions = useMemo(() => vehicleInfo?.avoid_options || [], [vehicleInfo]);
 
   useEffect(() => {
+    if (pendingAvoid.current && avoidOptions.includes(pendingAvoid.current)) {
+      setAvoid(pendingAvoid.current);
+      pendingAvoid.current = null;
+      return;
+    }
     if (!avoidOptions.includes(avoid)) setAvoid("");
   }, [avoidOptions, avoid]);
+
+  function pickFavorite(f) {
+    const place = { lat: f.lat, lon: f.lon, label: f.label };
+    if (!origin) setOrigin(place);
+    else setDestination(place);
+    setResult(null);
+  }
 
   const onPick = useCallback(
     async (point) => {
@@ -177,6 +207,16 @@ export default function NavigatePage() {
                 near={origin}
               />
             </div>
+            {favorites.length > 0 && (
+              <div className="fav-chips" aria-label="Saved places">
+                <span className="field-label">Saved places</span>
+                {favorites.slice(0, 6).map((f) => (
+                  <button type="button" key={f.id} className="fav-chip" onClick={() => pickFavorite(f)} title={f.detail || f.label}>
+                    <Icon name="pin" size={14} /> {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {picking && (
               <div className="hint info" role="status">
                 Tap the map to set the {picking === "origin" ? "start" : "destination"}.

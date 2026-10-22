@@ -33,8 +33,31 @@ export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn;
 }
 
+// Where bearer tokens come from: Firebase ID tokens (refreshed by the SDK) when Firebase
+// sign-in is active, otherwise the legacy token kept in localStorage.
+let tokenProvider = null;
+export function setTokenProvider(fn) {
+  tokenProvider = fn;
+}
+async function currentToken(forceRefresh) {
+  if (tokenProvider) return tokenProvider(forceRefresh);
+  return getToken();
+}
+
 /** Call the backend; throws ApiError with the server's safe message on failure. */
-export async function api(path, { method = "GET", body, params, signal, auth = true } = {}) {
+export async function api(path, options = {}) {
+  try {
+    return await request(path, options, false);
+  } catch (err) {
+    // A Firebase ID token can expire between refreshes (e.g. after sleep): refresh once.
+    if (err instanceof ApiError && err.code === "token_expired" && tokenProvider && options.auth !== false) {
+      return request(path, options, true);
+    }
+    throw err;
+  }
+}
+
+async function request(path, { method = "GET", body, params, signal, auth = true } = {}, forceRefresh) {
   const url = new URL(API_BASE_URL + path, window.location.origin);
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
@@ -43,7 +66,7 @@ export async function api(path, { method = "GET", body, params, signal, auth = t
   }
   const headers = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const token = auth ? getToken() : null;
+  const token = auth ? await currentToken(forceRefresh) : null;
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let response;
@@ -76,8 +99,11 @@ export async function api(path, { method = "GET", body, params, signal, auth = t
       (err && err.message) ||
       (typeof (data && data.detail) === "string" ? data.detail : null) ||
       `Request failed (HTTP ${response.status})`;
-    if (response.status === 401 && token && onUnauthorized) onUnauthorized();
-    throw new ApiError(response.status, err ? err.code : `http_${response.status}`, message, err && err.fields);
+    const code = err ? err.code : `http_${response.status}`;
+    // A wrong password typed into a form (401 invalid_credentials) is not a dead session.
+    const sessionEnded = response.status === 401 && code !== "invalid_credentials";
+    if (sessionEnded && token && onUnauthorized && !(code === "token_expired" && tokenProvider && !forceRefresh)) onUnauthorized(code);
+    throw new ApiError(response.status, code, message, err && err.fields);
   }
   return data;
 }
