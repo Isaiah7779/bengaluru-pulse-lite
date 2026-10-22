@@ -133,6 +133,21 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Named Cloudflare Tunnel: a stable public HTTPS hostname (e.g. pulse.<your-domain>)
+  # with no open inbound ports. Opt-in: enable with COMPOSE_PROFILES=tunnel and set
+  # CLOUDFLARE_TUNNEL_TOKEN in the git-ignored .env (docs/DEPLOYMENT_GUIDE.md §8a).
+  # The public hostname and its origin (http://frontend:80) are set in the Cloudflare
+  # dashboard; the token only lets this connector serve that tunnel.
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.3
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    profiles: ["tunnel"]
+
 volumes:
   pgdata:
     name: bp_pgdata

@@ -158,7 +158,66 @@ Copy the `https://<random-words>.trycloudflare.com` URL it prints; stop it with 
 * Only port 8080 (nginx) is exposed; admin endpoints require an administrator token.
   Anyone with the URL can register and plan routes, which spends the shared TomTom
   budget (capped at 2,000 calls/day) — stop the tunnel when not demonstrating.
-* Quick tunnels are meant for testing, not production; for a permanent URL see §6.
+* Quick tunnels are meant for testing, not production; for a permanent URL see §8a.
+* **Browser "Deceptive site" warnings.** On 23 Oct 2026 Google Safe Browsing (used by
+  Chrome and Safari) flagged the quick-tunnel hostname then in use as "trying to trick
+  visitors into sharing personal info". Its TLS certificate was valid
+  (`*.trycloudflare.com`, Google Trust Services). The likely trigger is a password sign-in
+  page on an anonymous `trycloudflare.com` name. Check a hostname at
+  `https://transparencyreport.google.com/safe-browsing/search?url=<hostname>`. Do not tell
+  users to click through; use a stable domain (§8a).
+
+## 8a. Stable domain with a named Cloudflare Tunnel (prepared)
+
+A named tunnel gives a permanent `https://pulse.<your-domain>` address with Cloudflare's
+certificate, and still opens no inbound ports. It runs as the opt-in `tunnel` service in
+`docker-compose.yml` (image `cloudflare/cloudflared:2026.9.3`), which starts and restarts
+with the stack. Everything below is on Cloudflare's free plan. Only the domain itself costs
+money, and you already own it.
+
+**1. Put the domain on Cloudflare** (one time; changes who answers DNS for the domain):
+1. Sign up or sign in at <https://dash.cloudflare.com> → **Add a domain** → enter the domain →
+   choose the **Free** plan.
+2. Cloudflare imports existing DNS records. **Compare them with your current registrar's
+   DNS list** and add anything missing, especially MX/TXT records if the domain receives
+   e-mail. Otherwise mail can break when the nameservers switch.
+3. At your registrar, replace the nameservers with the two Cloudflare shows. If DNSSEC is
+   on at the registrar, turn it off first. Cloudflare can re-enable it later.
+4. Wait until the domain shows **Active** in Cloudflare. This is usually minutes, but can
+   take up to 24 h.
+
+**2. Create the tunnel** (Cloudflare dashboard → **Zero Trust** → **Networks** → **Tunnels**):
+1. **Create a tunnel** → type **Cloudflared** → name it `bengaluru-pulse`.
+2. On the install screen, choose **Docker** and copy only the **token**: the long value after
+   `--token`. It is a secret, so don't paste it into chat, commits or screenshots.
+3. **Public hostname**: subdomain `pulse` (or any), your domain, service type **HTTP**, URL
+   **`frontend:80`**. That is the Docker service name, reached inside the compose network.
+4. Save. Cloudflare creates the DNS record automatically.
+
+**3. Run it on this laptop.** Add to the root `.env` (git-ignored):
+
+```
+CLOUDFLARE_TUNNEL_TOKEN=<the token>
+COMPOSE_PROFILES=tunnel
+```
+
+```bash
+docker compose up -d tunnel
+docker compose logs --tail 20 tunnel     # look for "Registered tunnel connection"
+```
+
+`COMPOSE_PROFILES=tunnel` makes a normal `docker compose up -d` include the tunnel from now
+on. Without a token the service does not start, so nothing breaks.
+
+**4. After it works:**
+* Stop the quick tunnel; it is no longer needed.
+* Firebase → Authentication → Settings → **Authorized domains**: add `pulse.<your-domain>`.
+* Android app: *Account → Server* → `https://pulse.<your-domain>`. For distributed builds,
+  set `EXPO_PUBLIC_API_BASE_URL=https://pulse.<your-domain>/api` (now a stable address).
+* Optional: in Cloudflare, **SSL/TLS → Edge Certificates → Always Use HTTPS** = on.
+
+**Rotate the token** (if it leaks): Zero Trust → Tunnels → `bengaluru-pulse` → **Refresh
+token**, update `.env`, then run `docker compose up -d tunnel`.
 
 ## 9. Mobile app
 
