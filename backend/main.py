@@ -51,10 +51,21 @@ def create_app() -> FastAPI:
 
     install_error_handlers(app)
 
-    from api import admin, auth, community, forecast_api, geocode, health, legacy, me, routing_api, traffic_api
+    from fastapi import Depends
 
-    for module in (health, auth, me, routing_api, geocode, traffic_api, forecast_api, community, admin, legacy):
+    from api import admin, auth, community, forecast_api, geocode, health, legacy, me, routing_api, traffic_api
+    from api.deps import app_access
+
+    # Endpoint classes (see docs/AUTHENTICATION.md):
+    #   public operational  health (/health, /health/ready — container and uptime checks)
+    #   sign-in             auth (each endpoint enforces its own token/password rules)
+    #   admin only          admin (router-level require_admin)
+    #   signed-in user      everything else, guarded by app_access (API_AUTH_REQUIRED)
+    # No internal service calls the HTTP API: the collector writes to PostgreSQL directly.
+    for module in (health, auth, admin):
         app.include_router(module.router)
+    for module in (me, routing_api, geocode, traffic_api, forecast_api, community, legacy):
+        app.include_router(module.router, dependencies=[Depends(app_access)])
 
     logger.info(
         "Bengaluru Pulse API %s started (env=%s, db=%s)",

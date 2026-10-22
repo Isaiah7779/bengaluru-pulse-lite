@@ -7,6 +7,7 @@ repr(), logs or error messages.
 from __future__ import annotations
 
 import logging
+import os
 import secrets
 from functools import lru_cache
 from pathlib import Path
@@ -94,6 +95,15 @@ class Settings(BaseSettings):
     access_token_minutes: int = 60
     login_max_attempts: int = 5
     login_window_seconds: int = 300
+    # Firebase Authentication. Only the project ID is needed to verify ID tokens
+    # (Google's public signing keys); no service-account key is required.
+    firebase_project_id: Optional[str] = None
+    # Require a signed-in, verified user for application endpoints (health stays public).
+    api_auth_required: bool = True
+    # Built-in e-mail/password accounts (pre-Firebase). Kept during the transition;
+    # set LEGACY_AUTH_ENABLED=false once every account signs in through Firebase.
+    legacy_auth_enabled: bool = True
+    legacy_registration_enabled: bool = True
 
     # -- legacy ML artifacts -------------------------------------------------
     traffic_model_path: str = "traffic_model_tuned.pkl"
@@ -104,6 +114,11 @@ class Settings(BaseSettings):
     model_registry_dir: str = "models"
 
     # ------------------------------------------------------------------------
+    @field_validator("firebase_project_id", mode="before")
+    @classmethod
+    def _empty_is_none(cls, value):
+        return None if isinstance(value, str) and not value.strip() else value
+
     @field_validator("tomtom_api_key", "jwt_secret", mode="before")
     @classmethod
     def _empty_secret_is_none(cls, value):
@@ -118,6 +133,8 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET (>=32 chars) is required in production")
             if "*" in self.cors_origins:
                 raise ValueError("Wildcard CORS origin is not allowed in production")
+            if os.environ.get("FIREBASE_AUTH_EMULATOR_HOST"):
+                raise ValueError("FIREBASE_AUTH_EMULATOR_HOST must not be set in production")
         return self
 
     # ------------------------------------------------------------------------

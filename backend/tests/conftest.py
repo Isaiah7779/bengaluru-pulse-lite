@@ -30,6 +30,9 @@ os.environ.update(
         "GEOCODE_FALLBACK_ENABLED": "false",
         "LOG_LEVEL": "WARNING",
         "CORS_ORIGINS": "http://localhost:3000",
+        # Most suites exercise endpoints anonymously; test_firebase_auth.py turns this on.
+        "API_AUTH_REQUIRED": "false",
+        "FIREBASE_PROJECT_ID": "",
     }
 )
 

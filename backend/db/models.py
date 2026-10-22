@@ -55,7 +55,10 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(100))
+    # NULL for accounts that only sign in through Firebase.
+    password_hash: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Firebase Authentication UID; set on first verified sign-in or by explicit linking.
+    firebase_uid: Mapped[Optional[str]] = mapped_column(String(128), unique=True, index=True, nullable=True)
     display_name: Mapped[str] = mapped_column(String(80))
     role: Mapped[str] = mapped_column(String(16), default="user", index=True)  # user | admin
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
