@@ -58,7 +58,7 @@ Use only real screenshots and the measured numbers given here.
 * **Visual:** test summary table from TEST_REPORT.md.
 
 ### 11. Limitations, future work, conclusion
-* Not publicly deployed; no validated forecasting model; 26 sample points; mobile not run on a device; TomTom terms pending.
+* Not publicly deployed; no validated forecasting model; 26 sample points; native mobile app not launched on a device (web app verified on iPhone Safari); temporary tunnel only; TomTom terms pending.
 * Next: ≥ 14 days data → evaluate models prospectively; deploy on a free VM; device testing.
 * **Notes:** close with the one-line conclusion from FINAL_PROJECT_REPORT §12.
 

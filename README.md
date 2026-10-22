@@ -51,7 +51,7 @@ docker-compose.prod.yml      production overlay (HTTPS, single server)
 
 From the submission ZIP: unzip it and open a terminal in the extracted folder.
 
-From Git (only once the `v2-build` branch has been pushed; it is local at the time of writing):
+From Git (the `v2-build` branch is on GitHub; the newest local commits may not be pushed yet):
 
 ```bash
 git clone https://github.com/Isaiah7779/bengaluru-pulse-lite.git

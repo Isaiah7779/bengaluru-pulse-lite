@@ -14,7 +14,8 @@
 | Presentation outline | `docs/PRESENTATION_OUTLINE.md` | done |
 | Supporting design docs | `docs/ARCHITECTURE.md`, `ROUTING.md`, `TRAFFIC.md`, `ML_PIPELINE.md`, `DATABASE.md`, `SECURITY.md`, `RESEARCH.md`, `RESEARCH_MILESTONE_FORECASTING.md` | done |
 | Audit trail | `docs/PROJECT_AUDIT.md`, `RELEASE_READINESS.md`, `FINAL_SYSTEM_AUDIT.md`, `PROJECT_STATUS.md` | done |
-| Source ZIP | `dist/bengaluru-pulse-v2-r4-source.zip` | see "ZIP" below |
+| Source ZIP (current) | `dist/bengaluru-pulse-v2-r4-source-v2.zip` | see "ZIP" below |
+| Source ZIP (earlier, kept) | `dist/bengaluru-pulse-v2-r4-source.zip` | superseded; predates the mobile URL and iPhone results |
 | Slides (PowerPoint/PDF) | not produced — build from `PRESENTATION_OUTLINE.md` | **team** |
 | Screenshots for slides | not produced — capture from the running app | **team** |
 
@@ -56,7 +57,7 @@ ZIP, ≈ 1.4 GB) and supply their own TomTom key (optional).
 
 ## Decisions needing the owner's approval
 
-1. Push `v2-build` to the public GitHub repository (publishes code and docs).
+1. Push the latest local commits of `v2-build` (the branch itself was pushed on 22 Oct and CI passed).
 2. Untrack `backend/traffic.db` and `backend/traffic_model.pkl` from git (files stay on disk).
 3. Handle secrets in the OneDrive-synced folder (`backend/.env`, `data/.env.backup-20261022`).
 4. Delete the regenerable 2.3 GB `mobile/android` folder (OneDrive sync size).

@@ -235,7 +235,8 @@ Full evidence: [RESULTS_AND_LIMITATIONS.md](RESULTS_AND_LIMITATIONS.md).
 * No validated forecasting model; operational evaluation needs ≥ 14 days of data.
 * Traffic flow observed at 26 sample points only; TomTom is the single traffic source.
 * Motorcycle routing uses the car graph; two-wheeler-specific restrictions are not modelled.
-* Mobile app not tested on a device; iOS not built.
+* Native mobile app not launched on a device (App Store Expo Go does not yet support SDK 58; iOS device builds need Apple signing). The web app was verified on an iPhone in Safari.
+* External access is a temporary tunnel (URL changes; requires the laptop, Docker and the tunnel to keep running); permanent hosting is pending.
 * No e-mail verification or password reset.
 * TomTom data-storage terms not yet confirmed; collected data must not be published until they are.
 

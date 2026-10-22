@@ -19,7 +19,7 @@ Synthetic test fixtures are never used as evidence here.
 | Community verification | complete | mechanism tested [test]; no real submissions |
 | Auth / roles / security | complete | yes [test, live] |
 | Web app | complete | yes — browser walkthrough [live] |
-| Mobile app | builds | **not run on a device** |
+| Mobile app | builds (iOS/Android bundles, Android debug APK) | **native app not run on a device**; the web app was verified on the owner's iPhone (Safari) |
 | Public deployment | configuration prepared | **not deployed** |
 
 ## 2. Routing
@@ -126,8 +126,8 @@ on real data, nothing more. Current figures: `docker compose exec collector pyth
 6. **Single-moment observations:** the live routing examples are not statistically
    representative.
 7. **Motorcycle** uses the car graph; two-wheeler restrictions are not modelled.
-8. **Mobile** not run on a device; iOS not built.
-9. **Not deployed publicly**; CI never run on GitHub.
+8. **Native mobile app** not launched on a device (App Store Expo Go lacks SDK 58; iOS builds need Apple signing). The web app works in iPhone Safari (verified by the owner).
+9. **No permanent public deployment.** External access is a temporary Cloudflare quick tunnel: its URL changes on every start, and it works only while the laptop, Docker services, internet connection and tunnel process keep running. CI passed on GitHub (22 Oct 2026).
 10. **Terms:** TomTom storage terms unconfirmed — collected observations must not be published.
 
 ## 6. Next steps

@@ -135,8 +135,8 @@ OSRM (5000–5002) are bound to `127.0.0.1` and are not reachable from other dev
 | Access | URL | Verified |
 |---|---|---|
 | This laptop | http://localhost:8080 | page 200, API readiness all `ok` |
-| Same Wi-Fi (LAN) | http://192.168.1.7:8080 | 200 from the laptop's own LAN address; **phone test pending** (some routers isolate Wi-Fi clients) |
-| Temporary public HTTPS (Cloudflare quick tunnel) | printed by `cloudflared` at each start; on 22 Oct: `https://plus-obtain-sherman-knight.trycloudflare.com` | page 200; `/api/health/ready` all `ok`; place search; live traffic-timed route; the frontend's own API calls all 200 in a browser; admin API without token → 401 |
+| Same Wi-Fi (LAN) | http://192.168.1.7:8080 | 200 from the laptop's LAN address; **iPhone Safari: opened and planned a route (verified by the owner)** |
+| Temporary public HTTPS (Cloudflare quick tunnel) | printed by `cloudflared` at each start; on 22 Oct: `https://plus-obtain-sherman-knight.trycloudflare.com` | page 200; `/api/health/ready` all `ok`; place search; live traffic-timed route; the frontend's own API calls all 200 in a browser; admin API without token → 401; **iPhone Safari: opened (verified by the owner)** |
 
 The LAN address comes from `ipconfig` (Wi-Fi adapter) and changes with the network.
 The Windows network profile is *Public*; Docker Desktop's firewall rule already allows
@@ -216,5 +216,6 @@ For remote testing through the tunnel, create `mobile/.env` containing
 | App shows "Cannot reach the server at …" | the URL shown is wrong for this network: set `EXPO_PUBLIC_API_BASE_URL` or restart `npx expo start --lan` |
 | Tunnel URL stopped working | the `cloudflared` process ended or the laptop slept; start it again (new URL) |
 
-**Not yet verified:** opening the LAN or tunnel URL on the physical iPhone, and any launch
-of the mobile app on an iPhone.
+**Verified by the owner on the iPhone (Safari):** the tunnel URL and the LAN URL open, and route
+planning displays a route. **Not verified:** installing or launching the native Expo app on the
+iPhone — mobile-web success does not establish native iOS installation.

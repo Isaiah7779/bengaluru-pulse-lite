@@ -2,8 +2,10 @@
 
 All results below were produced on 2026‑10‑22 on the development machine
 (Windows 11, 8 CPUs, 14.8 GB RAM, Docker Desktop 29.7, Python 3.12, Node 22.18)
-with the local Docker Compose stack running. Nothing here was run on GitHub
-Actions (the branch is not pushed).
+with the local Docker Compose stack running, unless stated otherwise. After `v2-build`
+was pushed, GitHub Actions CI ran once on commit `6b37482` and passed all four jobs
+(backend, frontend, mobile, docker):
+https://github.com/Isaiah7779/bengaluru-pulse-lite/actions/runs/39756763914.
 
 ## R4 verification run (22 Oct 2026, 08:38–08:45 UTC)
 
@@ -31,9 +33,10 @@ warning from a test that deliberately forges a JWT.
 ### Known failures / not verified
 
 * No failing tests at the time of this run.
-* Not verified: GitHub Actions runs (branch not pushed), public deployment, mobile app on
-  a device or emulator, a full fresh-clone `docker compose up` on a second machine,
-  load/performance beyond single-user latency.
+* Not verified: permanent public deployment, the native mobile app on a device or
+  emulator, a full fresh-clone `docker compose up` on a second machine,
+  load/performance beyond single-user latency. CI on GitHub covers commit `6b37482`
+  only; later local commits have not been through GitHub CI.
 
 ## Automated suites
 
@@ -142,4 +145,10 @@ model listed as *candidate* with measured MAEs) → traffic page at 375 px width
 | Expo diagnostics | `npx expo-doctor` → 20/20 checks passed |
 | Mobile iOS bundle | `npx expo export --platform ios` with the tunnel URL → bundled 640 modules; URL present once; 0 of 5 backend secrets present |
 | Expo dev server (`--lan`) | manifest for iOS: `exposdk:58.0.0`, `hostUri 192.168.1.7:8081` |
-| Physical iPhone | **not tested** (App Store Expo Go does not yet support SDK 58; LAN/tunnel URL in Safari awaits a manual test) |
+| iPhone Safari → public HTTPS tunnel URL | **PASS — verified manually by the project owner** (page opened) |
+| iPhone Safari → LAN URL `http://192.168.1.7:8080` (same Wi-Fi) | **PASS — verified manually by the project owner** (page opened) |
+| iPhone Safari → route planning | **PASS — verified manually by the project owner** (a route was displayed) |
+| Native Expo app on the physical iPhone | **not tested** — App Store Expo Go does not yet support SDK 58; a development build needs Apple signing (owner approval) |
+
+Mobile-web success on the iPhone shows the deployed web app works on the phone; it does
+**not** show that the native Expo app installs or launches on iOS.
