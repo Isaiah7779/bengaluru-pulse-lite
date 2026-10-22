@@ -24,7 +24,9 @@ so; nothing is simulated.
 | Preferences: fastest, shortest, least traffic now/predicted, balanced; avoid tolls/expressways/ferries | documented scoring |
 | Shortcut / longcut labels | strict definitions, same time basis |
 | Incidents, monitored traffic points, weather | collected from TomTom and Open-Meteo |
-| Accounts: trip history, favourites, incident reports, community route sharing | PostgreSQL/PostGIS |
+| Mandatory sign-in: e-mail/password with verification, Google, password reset | Firebase Authentication (verified by the Firebase Admin SDK) |
+| Personal favourites, journal and preferences | Cloud Firestore, owner-only security rules |
+| Accounts: trip history, incident reports, community route sharing, roles | PostgreSQL/PostGIS |
 | Admin: health, data freshness, moderation, model metrics, users, audit log | role checked in the backend |
 | Mobile app | Expo / React Native on the same API |
 
@@ -113,6 +115,13 @@ docker compose exec backend python -m auth.bootstrap --email you@example.org --n
 
 The bootstrap command prompts for a password (≥ 14 characters, mixed case and a digit).
 
+### 5. Firebase sign-in (recommended)
+
+Every page and application endpoint requires a signed-in user with a verified e-mail.
+Without Firebase configuration the built-in accounts above are used. To enable Firebase
+(free Spark plan), follow [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) and set the
+`FIREBASE_*` values in `.env`.
+
 ## Usage
 
 | What | Where |
@@ -123,8 +132,8 @@ The bootstrap command prompts for a password (≥ 14 characters, mixed case and 
 
 Plan a route: type a start and destination (or use ◎ for GPS / ⌖ to tap the map),
 choose a travel mode, preference and departure, then **Find routes**. Click any
-route card to see its explanation, incidents and steps. Sign in to save trips,
-report incidents or share a route; sign in as an administrator for the Admin page.
+route card to see its explanation, incidents and steps. Everything requires signing in
+(health checks excepted); administrators also get the Admin page.
 Step-by-step guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
 ## Tests
@@ -133,6 +142,7 @@ Step-by-step guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 cd backend && python -m pip install -r requirements-dev.txt && python -m pytest -q
 cd frontend && npm ci && CI=true npm test -- --watchAll=false && npm run build
 cd mobile && npm ci && npx tsc --noEmit
+cd firebase && npm ci && npm run test:rules   # Firestore rules on the emulator (needs Java)
 ```
 
 Backend integration tests use the running Docker services (OSRM on ports
@@ -167,7 +177,7 @@ don't use it unless you intend to.
 * Report: [FINAL_PROJECT_REPORT](docs/FINAL_PROJECT_REPORT.md) · [RESULTS_AND_LIMITATIONS](docs/RESULTS_AND_LIMITATIONS.md) · [TEST_REPORT](docs/TEST_REPORT.md)
 * Guides: [USER_GUIDE](docs/USER_GUIDE.md) · [DEPLOYMENT_GUIDE](docs/DEPLOYMENT_GUIDE.md) · [QUICKSTART](QUICKSTART.md)
 * Review: [DEMO_SCRIPT](docs/DEMO_SCRIPT.md) · [PRESENTATION_OUTLINE](docs/PRESENTATION_OUTLINE.md) · [SUBMISSION_CHECKLIST](docs/SUBMISSION_CHECKLIST.md)
-* Design: [ARCHITECTURE](docs/ARCHITECTURE.md) · [ROUTING](docs/ROUTING.md) · [TRAFFIC](docs/TRAFFIC.md) · [ML_PIPELINE](docs/ML_PIPELINE.md) · [DATABASE](docs/DATABASE.md) · [SECURITY](docs/SECURITY.md)
+* Design: [ARCHITECTURE](docs/ARCHITECTURE.md) · [ROUTING](docs/ROUTING.md) · [TRAFFIC](docs/TRAFFIC.md) · [ML_PIPELINE](docs/ML_PIPELINE.md) · [DATABASE](docs/DATABASE.md) · [SECURITY](docs/SECURITY.md) · [AUTHENTICATION](docs/AUTHENTICATION.md)
 
 ## Data and attribution
 
