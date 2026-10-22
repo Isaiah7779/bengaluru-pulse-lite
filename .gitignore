@@ -36,3 +36,6 @@ data/osm/
 data/
 backend/runtime/
 backend/models/
+
+# Submission packages
+dist/

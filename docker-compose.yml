@@ -14,7 +14,7 @@ x-backend-env: &backend-env
   OSRM_URL: http://osrm-car:5000
   OSRM_FOOT_URL: http://osrm-foot:5000
   OSRM_BICYCLE_URL: http://osrm-bicycle:5000
-  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000,http://127.0.0.1:3000}
   LOG_JSON: "true"
 
 services:

@@ -5,6 +5,36 @@ All results below were produced on 2026‑10‑22 on the development machine
 with the local Docker Compose stack running. Nothing here was run on GitHub
 Actions (the branch is not pushed).
 
+## R4 verification run (22 Oct 2026, 08:38–08:45 UTC)
+
+| Check | Command | Exact outcome |
+|---|---|---|
+| Backend suite | `cd backend && python -m pytest -q` | **115 passed**, 0 failed, 0 skipped, 2 warnings (95.8 s) |
+| Frontend tests | `CI=true npx react-scripts test --watchAll=false` | **7 passed** |
+| Frontend build | `CI=true npm run build` | compiled successfully (221.93 kB JS, 9.16 kB CSS, gzipped) |
+| Mobile typecheck | `npx tsc --noEmit` | 0 errors |
+| Running app via nginx | `GET http://localhost:8080/`, `/api/health/ready`, `POST /api/v1/routes` | 200; all readiness checks `ok`; route 200 in 1.4 s |
+| CORS (dev server) | preflight from `localhost:3000` / `localhost:8080` / foreign origin | allowed / allowed / rejected (400) |
+
+The 2 warnings: a deprecation warning from the test client library, and a short-key
+warning from a test that deliberately forges a JWT.
+
+### Reproducibility of the documented setup
+
+| Step (README) | How tested | Outcome |
+|---|---|---|
+| `infrastructure/osrm/prepare_graphs.sh` | fresh run into an empty scratch folder (fresh Geofabrik download) | exit 0 in 14 min; car/foot/bicycle graphs built (1.1 GB / 426 MB / 434 MB); reproduced car graph routes Airport → Whitefield 38.3 km (existing graph 38.03 km; newer OSM data) |
+| Gazetteer load (`docker compose run … geocoding.gazetteer`) | exact README command against a temporary database | 68,761 places loaded in 94 s |
+| Admin bootstrap (`auth.bootstrap`) | against the same temporary database (password via environment variable) | administrator created; temporary database dropped afterwards |
+| `docker compose up -d --build` from a fresh clone | **not tested** (would conflict with the running stack's ports); the same Dockerfiles/compose file built and ran in this workspace | — |
+
+### Known failures / not verified
+
+* No failing tests at the time of this run.
+* Not verified: GitHub Actions runs (branch not pushed), public deployment, mobile app on
+  a device or emulator, a full fresh-clone `docker compose up` on a second machine,
+  load/performance beyond single-user latency.
+
 ## Automated suites
 
 | Suite | Command | Result |
@@ -18,9 +48,14 @@ Actions (the branch is not pushed).
 | Mobile native build | `npx expo prebuild -p android && ./gradlew assembleDebug` | **app-debug.apk built** (150.6 MB, debug, all ABIs) |
 | Migrations | fresh PostGIS DB: upgrade → check → downgrade → upgrade | pass; `alembic check`: no drift |
 
-Backend tests by area: API surface 12, auth/RBAC 14, classification 8, community 9,
-routing engine 15, forecasting 6, geometry/scoring 9, providers/ingestion 12,
-live integration 4 test functions = 8 cases (5 benchmarks, modes, avoid-toll, migrations).
+Backend tests by area (115 total): API surface 12, auth/RBAC 14, classification 8,
+community 9, routing engine 15, offline forecasting pipeline 6, prospective forecast
+logging 8, geometry/scoring 9, providers/ingestion/collector 15, live integration
+4 test functions = 8 cases (5 benchmarks, modes, avoid-toll, migrations).
+
+Forecasting tests use **synthetic test fixtures** to check the machinery (splits,
+no lookahead, baselines, registry, activation gate, prediction-vs-actual matching).
+They are not experimental evidence and no metric from them is reported as a result.
 
 ## Live integration (real OSRM graphs, PostGIS)
 
@@ -83,6 +118,9 @@ model listed as *candidate* with measured MAEs) → traffic page at 375 px width
 10. A dead OSRM server starved uvloop's DNS threads so healthy servers looked down — circuit breaker + larger thread pool.
 11. cp1252-encoded source written by a patch script — repaired; UTF-8 enforced.
 12. Gazetteer bulk load 8 min — PostgreSQL COPY (5 s).
+13. TomTom HTTP 401 (invalid key) did not stop a collector sweep (26 wasted calls per sweep) — now stops and backs off (release audit).
+14. Collector could not write models/reports (read-only dirs) and the API could not see collector-trained models (unshared volume) — fixed and verified live (release audit).
+15. Local web dev server (`npm start`, port 3000) blocked by CORS against the Docker backend — compose default now allows it; verified by preflight (R4 audit).
 
 ## Not verified
 

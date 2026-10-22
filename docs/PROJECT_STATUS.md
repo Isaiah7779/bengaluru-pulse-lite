@@ -33,6 +33,13 @@ See [RELEASE_READINESS.md](RELEASE_READINESS.md): 115 backend + 7 frontend tests
 pass; two defects fixed (TomTom 401 handling; unwritable/unshared model and report
 directories); prospective forecast logging (milestone M1) running.
 
+## R4 submission preparation (2026‑10‑22)
+
+Deliverables: FINAL_PROJECT_REPORT, USER_GUIDE, DEPLOYMENT_GUIDE, TEST_REPORT,
+RESULTS_AND_LIMITATIONS, DEMO_SCRIPT, PRESENTATION_OUTLINE, SUBMISSION_CHECKLIST.
+Verified: 115 backend + 7 frontend tests, build, graph build reproduced from scratch,
+gazetteer/bootstrap commands. Forecasting remains unvalidated (insufficient data).
+
 ## Next actions (owner)
 
 1. Decide whether to push `v2-build` to `github.com/Isaiah7779/bengaluru-pulse-lite` (public) → CI runs.

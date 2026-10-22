@@ -1,54 +1,161 @@
-# Bengaluru Pulse
+# Bengaluru Pulse V2
 
-Route planning for Bengaluru that explains itself. Bengaluru Pulse compares several
-real road routes across the full city OpenStreetMap graph, times them with live or
-predicted traffic where available, flags genuine **shortcuts** (shorter *and* faster)
-and **longcuts** (longer but faster), and shows exactly where every number came from.
-Nothing is simulated: when a data source is missing, the app says so.
+Evidence-based route planning and traffic intelligence for Bengaluru.
 
-* **Web**: map-centred navigation, traffic, account and admin pages (React).
-* **Mobile**: Expo / React Native app on the same API.
-* **API**: FastAPI + PostgreSQL/PostGIS + OSRM (car, foot, bicycle graphs).
+Bengaluru Pulse compares several real routes across the full OpenStreetMap road
+network for **car, motorcycle, bicycle and walking**. It times car and motorcycle
+routes with live or predicted **TomTom** traffic, labels **shortcuts** (shorter *and*
+faster) and **longcuts** (longer but faster) against a stated reference route, and
+shows where every number came from. When a data source is unavailable the app says
+so; nothing is simulated.
 
-## What it does
+> Project status (Oct 2026): runs end-to-end locally with Docker. **Not publicly
+> deployed. No forecasting model has been validated yet**; see
+> [docs/RESULTS_AND_LIMITATIONS.md](docs/RESULTS_AND_LIMITATIONS.md).
 
-| Feature | Data behind it |
+## Features
+
+| Feature | Backed by |
 |---|---|
-| Place search (addresses, landmarks, shops, localities, coordinates, GPS, map tap) | 68,761-place OpenStreetMap gazetteer; Photon fallback |
-| Car, motorcycle, bicycle and walking routes | OSRM car / foot / bicycle graphs (motorcycle on the car graph, disclosed) |
-| Up to 5 diverse alternatives with turn-by-turn steps | OSRM + corridor candidates, geometric dedup |
-| Live and future-departure travel times | TomTom routing on each route's own geometry (length-verified) |
-| Fastest / shortest / least traffic / balanced; avoid tolls, expressways, ferries | documented scoring |
-| Shortcut / longcut labels against an explicit reference route | strict definitions, same time basis |
-| Incidents, monitored traffic points, weather | TomTom incidents & flow (collected), Open-Meteo |
-| Forecasts | only from a model that beat baselines on held-out data — none yet (see below) |
-| Community shortcuts | GPS trips → map matching → 3 independent confirmations → admin review |
-| Accounts | trip history, favourites, incident reports; admin moderation, data freshness, model metrics, health |
+| Place search: addresses, landmarks, shops, localities, coordinates, GPS, map tap | 68,761-place OSM gazetteer (Photon fallback) |
+| Car / motorcycle / bicycle / walking routes with turn-by-turn steps | OSRM car, foot and bicycle graphs (motorcycle uses the car graph, disclosed) |
+| Up to 5 diverse alternatives | OSRM alternatives + corridor candidates, geometric deduplication |
+| Live or future-departure travel times | TomTom routing on each route's own geometry |
+| Preferences: fastest, shortest, least traffic now/predicted, balanced; avoid tolls/expressways/ferries | documented scoring |
+| Shortcut / longcut labels | strict definitions, same time basis |
+| Incidents, monitored traffic points, weather | collected from TomTom and Open-Meteo |
+| Accounts: trip history, favourites, incident reports, community route sharing | PostgreSQL/PostGIS |
+| Admin: health, data freshness, moderation, model metrics, users, audit log | role checked in the backend |
+| Mobile app | Expo / React Native on the same API |
 
-## Honest status
+## Repository layout
 
-* Runs end-to-end locally (Docker Compose); **not yet publicly deployed** — needs an
-  owner-created hosting account (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
-* Forecasting: on the public daily dataset no model beats the historical average;
-  the operational forecaster waits for ≥ 14 days of collected data
-  ([docs/ML_PIPELINE.md](docs/ML_PIPELINE.md)).
-* Traffic flow is observed at 26 sample points, not city-wide.
+```
+backend/          FastAPI app, routing engine, collector, forecasting, tests
+frontend/         React web app (served by nginx in Docker)
+mobile/           Expo mobile app
+infrastructure/   OSRM graph build scripts, Caddy config (production)
+docs/             reports and guides (start with docs/FINAL_PROJECT_REPORT.md)
+docker-compose.yml           local stack
+docker-compose.prod.yml      production overlay (HTTPS, single server)
+```
 
-## Quick start
+## Prerequisites
 
-See [QUICKSTART.md](QUICKSTART.md). In short:
+* Docker Desktop (Compose v2.24+). Allocate ≥ 4 GB RAM; ≈ 5 GB free disk for images, graphs and the OSM download.
+* Git and a Bash shell (Git Bash on Windows) for the graph-build script.
+* Internet access for the first build (Docker images, Geofabrik OSM extract).
+* Optional: a free TomTom developer API key for live traffic; Python 3.12 and Node 22 for running tests outside Docker.
+
+## Installation
+
+From the submission ZIP: unzip it and open a terminal in the extracted folder.
+
+From Git (only once the `v2-build` branch has been pushed; it is local at the time of writing):
+
+```bash
+git clone https://github.com/Isaiah7779/bengaluru-pulse-lite.git
+cd bengaluru-pulse-lite
+git checkout v2-build
+```
+
+### 1. Build the road graphs (one time, ≈ 10–20 min)
+
+```bash
+bash infrastructure/osrm/prepare_graphs.sh "$(pwd)/data"
+```
+
+This downloads the Geofabrik *India – Southern Zone* extract (~560 MB), cuts the
+Bengaluru area and builds `data/osm/` (car), `data/osrm-foot/` and `data/osrm-bicycle/`.
+Skip it if those folders already contain `bengaluru.osrm.*` files.
+
+### 2. Environment setup
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Edit `backend/.env`:
+
+* `TOMTOM_API_KEY=` your key (optional; without it routes use OSRM free-flow times, clearly labelled).
+* `JWT_SECRET=` a random string (`python -c "import secrets; print(secrets.token_urlsafe(48))"`); optional for local use.
+
+A root `.env` is optional for local use (defaults are built in); copy `.env.example` only to change ports or the database password.
+Never commit `.env` files (they are gitignored).
+
+### 3. Start with Docker
 
 ```bash
 docker compose up -d --build
 ```
-then open http://localhost:8080.
+
+Services: `postgres`, `osrm-car`, `osrm-foot`, `osrm-bicycle`, `backend`, `collector`, `frontend`.
+The backend applies database migrations on start-up.
+
+### 4. Load place search and create an administrator (one time)
+
+```bash
+docker compose run --rm -v "$(pwd)/data/osm:/data:ro" backend python -m geocoding.gazetteer /data/bengaluru.osm.pbf
+docker compose exec backend python -m auth.bootstrap --email you@example.org --name "Your Name"
+```
+
+The bootstrap command prompts for a password (≥ 14 characters, mixed case and a digit).
+
+## Usage
+
+| What | Where |
+|---|---|
+| Web app | http://localhost:8080 |
+| API documentation (Swagger) | http://localhost:8000/docs |
+| Readiness of all dependencies | http://localhost:8000/health/ready |
+
+Plan a route: type a start and destination (or use ◎ for GPS / ⌖ to tap the map),
+choose a travel mode, preference and departure, then **Find routes**. Click any
+route card to see its explanation, incidents and steps. Sign in to save trips,
+report incidents or share a route; sign in as an administrator for the Admin page.
+Step-by-step guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
+
+## Tests
+
+```bash
+cd backend && python -m pip install -r requirements-dev.txt && python -m pytest -q
+cd frontend && npm ci && CI=true npm test -- --watchAll=false && npm run build
+cd mobile && npm ci && npx tsc --noEmit
+```
+
+Backend integration tests use the running Docker services (OSRM on ports
+5000–5002, PostGIS on 5433) and skip automatically if they are not running.
+Results: [docs/TEST_REPORT.md](docs/TEST_REPORT.md).
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `/health/ready` shows an OSRM service `down` | `docker compose ps`; check the graph folders exist; `docker compose logs osrm-car`. A routing server recovers ~20 s after restart. |
+| Routes show "Free-flow estimate" only | No or invalid `TOMTOM_API_KEY`, or the daily budget is used up (Admin → System health shows usage). |
+| Place search finds nothing | The gazetteer was not loaded; run step 4. |
+| "Cannot reach the Bengaluru Pulse server" in the browser | Backend not healthy: `docker compose logs backend`. |
+| Port already in use (5000–5002, 5433, 8000, 8080) | Stop the conflicting program, or set `FRONTEND_PORT` / `POSTGRES_HOST_PORT` in a root `.env`. |
+| Python cannot connect to Postgres on Windows | Use `127.0.0.1`, not `localhost`, in `DATABASE_URL`. |
+| Web app via `npm start` blocked by CORS | Use the default compose settings (allow `localhost:3000`) or set `CORS_ORIGINS`. |
+
+## Shutdown
+
+```bash
+docker compose stop          # stop everything, keep data
+docker compose down          # remove containers, keep data volumes
+```
+
+Data (database, collected observations, models) lives in Docker volumes and
+survives both commands. **`docker compose down -v` deletes all collected data**;
+don't use it unless you intend to.
 
 ## Documentation
 
-[Architecture](docs/ARCHITECTURE.md) · [Routing](docs/ROUTING.md) · [Traffic](docs/TRAFFIC.md) ·
-[ML pipeline](docs/ML_PIPELINE.md) · [Database](docs/DATABASE.md) · [Security](docs/SECURITY.md) ·
-[Tests](docs/TEST_REPORT.md) · [Deployment](docs/DEPLOYMENT.md) · [Research](docs/RESEARCH.md) ·
-[Status](docs/PROJECT_STATUS.md) · [Final audit](docs/FINAL_SYSTEM_AUDIT.md)
+* Report: [FINAL_PROJECT_REPORT](docs/FINAL_PROJECT_REPORT.md) · [RESULTS_AND_LIMITATIONS](docs/RESULTS_AND_LIMITATIONS.md) · [TEST_REPORT](docs/TEST_REPORT.md)
+* Guides: [USER_GUIDE](docs/USER_GUIDE.md) · [DEPLOYMENT_GUIDE](docs/DEPLOYMENT_GUIDE.md) · [QUICKSTART](QUICKSTART.md)
+* Review: [DEMO_SCRIPT](docs/DEMO_SCRIPT.md) · [PRESENTATION_OUTLINE](docs/PRESENTATION_OUTLINE.md) · [SUBMISSION_CHECKLIST](docs/SUBMISSION_CHECKLIST.md)
+* Design: [ARCHITECTURE](docs/ARCHITECTURE.md) · [ROUTING](docs/ROUTING.md) · [TRAFFIC](docs/TRAFFIC.md) · [ML_PIPELINE](docs/ML_PIPELINE.md) · [DATABASE](docs/DATABASE.md) · [SECURITY](docs/SECURITY.md)
 
 ## Data and attribution
 
