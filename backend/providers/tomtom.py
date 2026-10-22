@@ -225,8 +225,9 @@ class TomTomProvider:
                     method, BASE + path, params={**params, "key": self.key}, json=json_body
                 )
             status = response.status_code
-            if status == 403:
-                raise ProviderUnavailable("TomTom rejected the request (quota or key)")
+            if status in (401, 403):
+                # Invalid/revoked key or exhausted quota: retrying cannot succeed.
+                raise ProviderUnavailable(f"TomTom rejected the request (HTTP {status}: invalid key or quota exhausted)")
             if status >= 400:
                 raise ProviderError(f"TomTom {endpoint} returned HTTP {status}")
             data = response.json()

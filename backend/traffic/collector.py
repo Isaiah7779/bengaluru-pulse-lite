@@ -29,6 +29,10 @@ from traffic.ingest import ensure_segments, store_flow, store_incidents, store_w
 
 logger = logging.getLogger("pulse.collector")
 
+# Stop a sweep after this many consecutive provider errors (e.g. an outage)
+# instead of spending one request per remaining point.
+MAX_CONSECUTIVE_ERRORS = 3
+
 
 async def collect_flow(settings: Settings, tomtom: Optional[TomTomProvider] = None) -> Dict[str, int]:
     tomtom = tomtom or TomTomProvider(settings)
@@ -39,17 +43,25 @@ async def collect_flow(settings: Settings, tomtom: Optional[TomTomProvider] = No
         return stats
     with session_scope() as session:
         segments = [(s.id, s.code, s.lat, s.lon) for s in ensure_segments(session)]
+    consecutive_errors = 0
     for seg_id, code, lat, lon in segments:
         try:
             reading = await tomtom.flow_segment(lat, lon, purpose="collector", background=True)
         except ProviderUnavailable as exc:
             logger.warning("Flow collection stopped: %s", exc)
             stats["skipped"] += 1
+            stats["provider_unavailable"] = 1
             break
         except ProviderError as exc:
             logger.warning("Flow reading rejected for %s: %s", code, exc)
             stats["invalid"] += 1
+            consecutive_errors += 1
+            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                logger.warning("Flow sweep aborted after %d consecutive provider errors", consecutive_errors)
+                stats["aborted"] = 1
+                break
             continue
+        consecutive_errors = 0
         with session_scope() as session:
             from db.models import TrafficSegment
 
@@ -180,8 +192,9 @@ async def run_forever(settings: Settings) -> None:
         for task in tasks:
             if now >= task.next_run:
                 try:
-                    await task.run()
-                    task.schedule_after(True)
+                    result = await task.run() or {}
+                    # A sweep that hit an unusable provider backs off like a failure.
+                    task.schedule_after(not (result.get("provider_unavailable") or result.get("aborted")))
                 except Exception:
                     logger.exception("Collector task %s failed (failures=%d)", task.name, task.failures + 1)
                     task.schedule_after(False)

@@ -82,7 +82,10 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
+      # Shared with the collector, which runs the daily retrain: the API must
+      # load the artifacts it writes, and both must survive rebuilds.
       - models:/app/models
+      - evaluations:/app/evaluation/v2
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,6 +95,9 @@ services:
     build:
       context: ./backend
     command: ["sh", "-c", "python -m alembic upgrade head && python -m traffic.collector"]
+    volumes:
+      - models:/app/models
+      - evaluations:/app/evaluation/v2
     env_file:
       - path: ./backend/.env
         required: false
@@ -121,3 +127,4 @@ volumes:
   pgdata:
     name: bp_pgdata
   models:
+  evaluations:

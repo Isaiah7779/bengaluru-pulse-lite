@@ -14,7 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . ./
 
-RUN useradd --create-home appuser && mkdir -p /app/runtime /app/models && chown -R appuser:appuser /app
+# Files copied from a Windows/OneDrive build context can arrive read-only;
+# the runtime, model-registry and evaluation directories must be writable.
+RUN useradd --create-home appuser     && mkdir -p /app/runtime /app/models /app/evaluation/v2     && chown -R appuser:appuser /app     && chmod -R u+rwX /app/runtime /app/models /app/evaluation
 USER appuser
 
 EXPOSE 8000

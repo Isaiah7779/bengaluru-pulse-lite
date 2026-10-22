@@ -177,7 +177,7 @@ def test_collector_flow_with_fake_provider():
             return reading(datetime.now(timezone.utc))
 
     stats = asyncio.run(collect_flow(get_settings(), Fake()))
-    assert stats == {"stored": 3, "duplicate": 0, "invalid": 1, "skipped": 1}
+    assert stats == {"stored": 3, "duplicate": 0, "invalid": 1, "skipped": 1, "provider_unavailable": 1}
 
 
 def test_retention_job_removes_expired_personal_and_observation_data():
@@ -198,3 +198,45 @@ def test_retention_job_removes_expired_personal_and_observation_data():
     assert result["trips"] == 1 and result["traffic_observations"] == 1
     with session_scope() as s:
         assert s.query(Trip).count() == 1
+
+
+def test_tomtom_401_is_unavailable_not_retried_per_point(monkeypatch):
+    monkeypatch.setattr(tomtom_module, "async_client",
+                        lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(401, json={})), timeout=timeout))
+    provider = TomTomProvider(get_settings().model_copy(update={"tomtom_api_key": SecretStr("revoked")}))
+    from traffic.collector import collect_flow
+
+    stats = asyncio.run(collect_flow(get_settings(), provider))
+    assert stats["provider_unavailable"] == 1 and stats["stored"] == 0
+    with session_scope() as s:
+        from db.models import ProviderCall
+
+        assert s.query(ProviderCall).count() == 1  # stopped after the first rejected call
+
+
+def test_flow_sweep_aborts_after_consecutive_errors():
+    from traffic.collector import MAX_CONSECUTIVE_ERRORS, collect_flow
+
+    class Down:
+        configured = True
+        calls = 0
+
+        async def flow_segment(self, lat, lon, purpose, background):
+            Down.calls += 1
+            raise ProviderError("TomTom flow returned HTTP 503")
+
+    stats = asyncio.run(collect_flow(get_settings(), Down()))
+    assert Down.calls == MAX_CONSECUTIVE_ERRORS and stats["aborted"] == 1
+
+
+def test_scheduler_backs_off_when_provider_unavailable():
+    import time as _time
+
+    from traffic.collector import Task
+
+    t = Task("flow", 1800, lambda: None)
+    t.schedule_after(False)
+    t.schedule_after(False)
+    assert t.failures == 2 and t.next_run - _time.monotonic() > 1800 * 3.9  # 4x interval
+    t.schedule_after(True)
+    assert t.failures == 0

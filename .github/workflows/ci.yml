@@ -85,6 +85,9 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -t pulse-backend:ci backend
       - run: docker build -t pulse-frontend:ci -f frontend/Dockerfile .
+      - name: Runtime directories are writable by the app user
+        run: |
+          docker run --rm pulse-backend:ci python -c "import pathlib; [(pathlib.Path(p) / '.w').touch() for p in ('/app/models', '/app/evaluation/v2', '/app/runtime')]"
       - name: Backend image imports and serves /health without external services
         run: |
           docker run -d --name api -e DB_AUTO_CREATE=true -e DATABASE_URL=sqlite:////tmp/ci.db -p 8000:8000 \
