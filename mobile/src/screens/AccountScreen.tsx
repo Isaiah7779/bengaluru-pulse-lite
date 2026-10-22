@@ -1,12 +1,11 @@
 import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { api, apiBaseSource, apiBaseUrl, BASIS_LABEL, fmtKm, fmtMin, saveToken, setServerOverride } from "../api";
+import { api, apiBaseSource, apiBaseUrl, BASIS_LABEL, fmtKm, fmtMin, setServerOverride } from "../api";
+import { useAuth, type User } from "../auth";
 import { Chip, colors, ErrorBox } from "../ui";
 
-type User = { id: number; email: string; display_name: string; role: string };
-
-function ServerSettings() {
+export function ServerSettings() {
   const [current, setCurrent] = useState(apiBaseUrl());
   const [text, setText] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -46,37 +45,6 @@ function ServerSettings() {
         <Text style={styles.link}>Use the default for this build</Text>
       </Pressable>
       {msg && <Text style={styles.line}>{msg}</Text>}
-    </View>
-  );
-}
-
-function SignIn({ onSignedIn }: { onSignedIn: (u: User) => void }) {
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  async function submit() {
-    setError(null);
-    try {
-      const res = mode === "login"
-        ? await api("/v1/auth/login", { method: "POST", body: { email, password } })
-        : await api("/v1/auth/register", { method: "POST", body: { email, password, display_name: name } });
-      await saveToken(res.access_token);
-      onSignedIn(res.user);
-    } catch (e: any) { setError(e.message); }
-  }
-  return (
-    <View>
-      <Text style={styles.h}>{mode === "login" ? "Sign in" : "Create account"}</Text>
-      {mode === "register" && <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} />}
-      <TextInput style={styles.input} placeholder="E-mail" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
-      <TextInput style={styles.input} placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
-      {error && <ErrorBox text={error} />}
-      <Pressable style={styles.primary} onPress={submit}><Text style={styles.primaryText}>{mode === "login" ? "Sign in" : "Create account"}</Text></Pressable>
-      <Pressable onPress={() => setMode(mode === "login" ? "register" : "login")}>
-        <Text style={styles.link}>{mode === "login" ? "New here? Create an account" : "Have an account? Sign in"}</Text>
-      </Pressable>
     </View>
   );
 }
@@ -154,20 +122,14 @@ function ReportIncident() {
   );
 }
 
-export default function AccountScreen({ user, onUser }: { user: User | null; onUser: (u: User | null) => void }) {
+export default function AccountScreen({ user }: { user: User }) {
+  const { logout } = useAuth();
   const [trips, setTrips] = useState<any[]>([]);
-  useEffect(() => { if (user) api("/v1/me/trips").then(setTrips).catch(() => setTrips([])); }, [user]);
-  if (!user)
-    return (
-      <ScrollView contentContainerStyle={styles.page}>
-        <SignIn onSignedIn={onUser} />
-        <ServerSettings />
-      </ScrollView>
-    );
+  useEffect(() => { api("/v1/me/trips").then(setTrips).catch(() => setTrips([])); }, [user]);
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <Text style={styles.h}>{user.display_name} <Text style={styles.muted}>({user.role})</Text></Text>
-      <Pressable onPress={async () => { await api("/v1/auth/logout", { method: "POST" }).catch(() => null); await saveToken(null); onUser(null); }}>
+      <Pressable onPress={logout}>
         <Text style={styles.link}>Sign out</Text>
       </Pressable>
       <Text style={styles.h}>Trip history</Text>

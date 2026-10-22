@@ -1,8 +1,9 @@
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
-import { api, loadServerOverride, loadToken } from "./src/api";
+import { AuthProvider, useAuth } from "./src/auth";
 import AccountScreen from "./src/screens/AccountScreen";
+import AuthScreen from "./src/screens/AuthScreen";
 import RouteScreen from "./src/screens/RouteScreen";
 import TrafficScreen from "./src/screens/TrafficScreen";
 import { colors } from "./src/ui";
@@ -10,16 +11,28 @@ import { colors } from "./src/ui";
 type Tab = "route" | "traffic" | "account";
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("route");
-  const [user, setUser] = useState<any>(null);
+  return (
+    <AuthProvider>
+      <Shell />
+    </AuthProvider>
+  );
+}
 
-  useEffect(() => {
-    loadServerOverride()
-      .catch(() => null)
-      .then(() => loadToken())
-      .then((t) => (t ? api("/v1/auth/me").then(setUser) : null))
-      .catch(() => setUser(null));
-  }, []);
+// Every screen needs a signed-in account with a verified e-mail (see src/auth.tsx).
+function Shell() {
+  const [tab, setTab] = useState<Tab>("route");
+  const { status, user } = useAuth();
+
+  if (status !== "ready" || !user)
+    return (
+      <SafeAreaView style={styles.app}>
+        <StatusBar style="dark" />
+        <View style={styles.header}>
+          <Text style={styles.brand}>◉ Bengaluru Pulse</Text>
+        </View>
+        <AuthScreen />
+      </SafeAreaView>
+    );
 
   return (
     <SafeAreaView style={styles.app}>
@@ -30,14 +43,14 @@ export default function App() {
       <View style={{ flex: 1 }}>
         {tab === "route" && <RouteScreen signedIn={!!user} />}
         {tab === "traffic" && <TrafficScreen />}
-        {tab === "account" && <AccountScreen user={user} onUser={setUser} />}
+        {tab === "account" && <AccountScreen user={user} />}
       </View>
       <View style={styles.tabs} accessibilityRole="tablist">
         {(
           [
             ["route", "Navigate"],
             ["traffic", "Traffic"],
-            ["account", user ? "Account" : "Sign in"],
+            ["account", "Account"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <Pressable key={key} style={styles.tab} onPress={() => setTab(key)} accessibilityRole="tab" accessibilityState={{ selected: tab === key }}>

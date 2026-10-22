@@ -87,7 +87,27 @@ export class ApiError extends Error {
 
 type Options = { method?: string; body?: unknown; params?: Record<string, string | number | undefined> };
 
-export async function api<T = any>(path: string, { method = "GET", body, params }: Options = {}): Promise<T> {
+// Firebase ID tokens (refreshed by the SDK) when Firebase sign-in is active; otherwise the
+// legacy token above. Set by src/auth.tsx.
+let tokenProvider: ((forceRefresh: boolean) => Promise<string | null>) | null = null;
+export function setTokenProvider(fn: typeof tokenProvider): void {
+  tokenProvider = fn;
+}
+let onSessionEnded: ((code: string) => void) | null = null;
+export function setSessionEndedHandler(fn: typeof onSessionEnded): void {
+  onSessionEnded = fn;
+}
+
+export async function api<T = any>(path: string, options: Options = {}): Promise<T> {
+  try {
+    return await request<T>(path, options, false);
+  } catch (e) {
+    if (e instanceof ApiError && e.code === "token_expired" && tokenProvider) return request<T>(path, options, true);
+    throw e;
+  }
+}
+
+async function request<T>(path: string, { method = "GET", body, params }: Options, forceRefresh: boolean): Promise<T> {
   const base = apiBaseUrl();
   if (!base) {
     throw new ApiError(0, "server_not_configured", "No server is set. Open Account → Server and enter the Bengaluru Pulse address.");
@@ -102,7 +122,8 @@ export async function api<T = any>(path: string, { method = "GET", body, params 
   }
   const headers: Record<string, string> = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const bearer = tokenProvider ? await tokenProvider(forceRefresh) : token;
+  if (bearer) headers.Authorization = `Bearer ${bearer}`;
   let res: Response;
   try {
     res = await fetch(url, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
@@ -116,8 +137,13 @@ export async function api<T = any>(path: string, { method = "GET", body, params 
     const fields = err?.code === "validation_error" && Array.isArray(err.fields)
       ? err.fields.map((f: any) => `${f.loc.filter((x: string) => x !== "body").join(".")}: ${f.msg}`).join("; ")
       : null;
-    if (res.status === 401 && token) await saveToken(null);
-    throw new ApiError(res.status, err?.code || `http_${res.status}`, fields || err?.message || `Request failed (HTTP ${res.status})`);
+    const code = err?.code || `http_${res.status}`;
+    // A wrong password typed into a form (invalid_credentials) does not end the session.
+    if (res.status === 401 && bearer && code !== "invalid_credentials" && !(code === "token_expired" && tokenProvider && !forceRefresh)) {
+      if (!tokenProvider) await saveToken(null);
+      onSessionEnded?.(code);
+    }
+    throw new ApiError(res.status, code, fields || err?.message || `Request failed (HTTP ${res.status})`);
   }
   return data as T;
 }
