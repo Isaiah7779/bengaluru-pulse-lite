@@ -81,8 +81,20 @@ Forecast logging results (prediction vs actual) are available to administrators 
 `GET /api/v1/admin/forecast/online` (via http://localhost:8080) or
 `http://localhost:8000/v1/admin/forecast/online` with an admin token.
 
-## 6. Mobile app (development build)
+## 6. On phones, tablets and other computers
 
-See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md#9-mobile-app). The mobile app offers
-Navigate, Traffic and Account (sign-in, trip history, GPS trip recording,
-incident reports) on the same backend.
+**Any device with a modern browser** (Android, iPhone, iPad, Windows, macOS, Linux):
+open the address the system owner gives you, either the same-Wi-Fi address
+(e.g. `http://192.168.1.7:8080`) or the HTTPS address. The layout adapts to phone,
+tablet and desktop screens. On a phone you can add it to the home screen:
+Safari → Share → *Add to Home Screen*, or Chrome → ⋮ → *Add to Home screen*.
+
+**Android app (APK)**: install the provided `.apk` (you may need to allow installing apps
+from your browser or file manager). Then open **Account → Server**, enter the HTTPS address
+you were given (for example `https://<name>.trycloudflare.com`) and tap **Test and save**.
+The app offers Navigate, Traffic and Account (sign-in, trip history, GPS trip recording,
+incident reports) on the same backend as the website.
+
+**iPhone/iPad app**: not yet installable. App Store Expo Go does not support SDK 58 yet,
+and a signed iOS build needs a paid Apple Developer account. Use the website in Safari,
+which works on the iPhone. Details: [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md#9-mobile-app).

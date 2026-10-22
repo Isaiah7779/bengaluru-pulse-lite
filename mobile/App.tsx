@@ -1,7 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
-import { api, loadToken } from "./src/api";
+import { api, loadServerOverride, loadToken } from "./src/api";
 import AccountScreen from "./src/screens/AccountScreen";
 import RouteScreen from "./src/screens/RouteScreen";
 import TrafficScreen from "./src/screens/TrafficScreen";
@@ -14,7 +14,9 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    loadToken()
+    loadServerOverride()
+      .catch(() => null)
+      .then(() => loadToken())
       .then((t) => (t ? api("/v1/auth/me").then(setUser) : null))
       .catch(() => setUser(null));
   }, []);

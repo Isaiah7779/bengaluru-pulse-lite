@@ -164,17 +164,27 @@ Copy the `https://<random-words>.trycloudflare.com` URL it prints; stop it with 
 
 ### Backend URL configuration
 
-`mobile/src/api.ts` chooses the backend in this order (the value is not a secret):
+Web and mobile use **one backend API**: the same FastAPI endpoints behind nginx at
+`<origin>/api`. `mobile/src/api.ts` chooses the backend in this order (none is a secret):
 
-1. `EXPO_PUBLIC_API_BASE_URL`, inlined when the bundle is built, e.g.
-   `https://<name>.trycloudflare.com/api`. Put it in `mobile/.env` (gitignored; see `mobile/.env.example`).
-2. Otherwise, during `npx expo start`, the laptop's LAN address taken from the Expo dev
-   server: `http://<LAN-IP>:8080/api` (verified: the dev-server manifest advertises `192.168.1.7`).
-3. Otherwise the Android-emulator alias `http://10.0.2.2:8080/api`.
+1. **A server set on the device**: *Account → Server* (tested with `GET /health` before
+   saving; stored in the device keystore). An installed APK/IPA can follow a changing
+   address, such as a temporary tunnel, without a rebuild. Enter e.g.
+   `https://<name>.trycloudflare.com`; `/api` is added automatically.
+2. **Build configuration**: `EXPO_PUBLIC_API_BASE_URL`, inlined when the bundle is built
+   (`mobile/.env` or the EAS build environment). Use this only for a **stable** HTTPS URL;
+   never bake a temporary tunnel URL into a distributed build.
+3. **Development only**: the laptop's LAN address from the Expo dev server,
+   `http://<LAN-IP>:8080/api` (verified: the dev-server manifest advertises `192.168.1.7`).
 
-`localhost` is never used (on a phone it is the phone). The app's Traffic screen shows the
-server in use. No API keys are in the mobile bundle (verified: none of the backend secrets
-appear in an exported iOS bundle).
+Nothing else is guessed: no `localhost` (on a phone that is the phone itself) and no
+emulator alias. Without a server, the app explains where to set one. The Traffic and Account
+screens show the server in use. No API keys are in the mobile bundle (verified: none of the
+backend secrets appear in an exported iOS bundle).
+
+**Plain HTTP:** release builds on Android and iOS allow only HTTPS by default. A LAN
+`http://` address works with development builds and Expo Go; installed release builds need
+an HTTPS server (the tunnel, or a future permanent HTTPS host).
 
 ### iPhone: supported testing routes (SDK 58)
 
@@ -219,3 +229,72 @@ For remote testing through the tunnel, create `mobile/.env` containing
 **Verified by the owner on the iPhone (Safari):** the tunnel URL and the LAN URL open, and route
 planning displays a route. **Not verified:** installing or launching the native Expo app on the
 iPhone — mobile-web success does not establish native iOS installation.
+
+## 10. Platform support
+
+All clients use the same backend API. Status as of 22 Oct 2026:
+
+| Platform | How users run it | Status and evidence |
+|---|---|---|
+| Android phones/tablets — browser | Chrome/Edge/Firefox → LAN or HTTPS URL | responsive layout verified at 375×812 and 768×1024 (emulated, Chromium); **not tested on a physical Android device** |
+| Android phones/tablets — app | install the APK, set the server (§9) | **release APK built** (`dist/bengaluru-pulse-v2-android-1.0.0-arm-release.apk`, 34.6 MB, Android 7.0+ / API 24, arm64-v8a + armeabi-v7a, signature verified); **not installed on a physical device or emulator** |
+| iPhone/iPad — browser | Safari → LAN or HTTPS URL | **iPhone: verified by the owner** (tunnel URL, LAN URL, route planning); iPad not tested |
+| iPhone/iPad — app | development or ad hoc build (§9) | configuration and iOS bundle verified (`expo-doctor` 20/20, 640 modules); **not built or installed** — needs a paid Apple Developer account (or a Mac with Xcode) |
+| Windows desktop | Chrome/Edge/Firefox → http://localhost:8080, LAN or HTTPS URL | verified in Chromium at 1280×800 and 1024×768; Edge (Chromium-based) expected to match; Firefox not tested |
+| macOS desktop | Safari/Chrome/Firefox → LAN or HTTPS URL | not tested (no Mac available); same responsive web app |
+| Linux desktop | Chrome/Firefox → LAN or HTTPS URL | not tested (no Linux desktop available); same responsive web app |
+
+Web browser requirements: a current evergreen browser with JavaScript; location access
+needs HTTPS (the tunnel/HTTPS host) or `localhost`. Browsers block GPS on plain-HTTP LAN
+addresses, so on the LAN URL use search or map-picking instead of "my location".
+
+### Desktop installers: not built (assessment)
+
+Everything the desktop needs (map, search, routes, traffic, accounts, admin) already runs
+in the browser, and the web app can be added as a standalone window from Chrome/Edge
+(*Install app*) because it ships a web manifest; that install flow was not tested here.
+A native wrapper (Tauri or Electron) would add a Rust or Electron toolchain, per-OS builds
+and code signing (Windows SmartScreen and Apple notarization need paid certificates), and
+update distribution, while still requiring the same backend. It brings no user-visible
+capability for this project, so no desktop installer is produced.
+
+### Manual test steps for devices not available here
+
+1. **Android browser:** same Wi-Fi → open `http://<laptop-LAN-IP>:8080` → plan Koramangala → Hebbal → open a route's steps → Traffic tab.
+2. **Android APK:** copy the APK to the phone → install → *Account → Server* → enter the HTTPS URL → *Test and save* → Navigate → plan a route.
+3. **iPad / macOS / Linux / Firefox:** open the HTTPS URL → plan a route → resize/rotate the window → check that the map and controls stay usable.
+
+
+### Android APK: build and install
+
+The APK is built locally from the generated native project (`mobile/android`, created by
+`npx expo prebuild`); no Expo or Google account is needed.
+
+```bash
+cd mobile
+npx expo prebuild --platform android --no-install      # sync native project with app.json (non-destructive)
+cd android
+# Git Bash; JAVA_HOME = a JDK 17, ANDROID_HOME = the Android SDK
+./gradlew assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
+# → android/app/build/outputs/apk/release/app-release.apk
+```
+
+Verified on 22 Oct 2026: build exit 0; `apksigner verify` passes (v2 signature);
+`aapt2 dump badging`: package `org.bengalurupulse.app` 1.0.0, minSdk 24, targetSdk 36,
+ABIs arm64-v8a and armeabi-v7a; permissions location + internet (+ vibrate, and biometric
+from `expo-secure-store`, unused); storage and overlay permissions removed via
+`android.blockedPermissions`. The JavaScript bundle is embedded; no server address and no
+secret is baked in (SHA-256 `6a1e8f6a…bca9e6`).
+
+**Signing:** the release build is signed with the template's *debug* keystore. It installs
+on devices but cannot be published on Google Play. For Play, create your own upload key, or
+use `eas build --profile production` (AAB) with an Expo account; both need your approval.
+
+**Install:** copy the APK to the phone (USB, cloud drive or chat) → open it → allow
+"install unknown apps" for that source → install. Or with USB debugging:
+`adb install dist/bengaluru-pulse-v2-android-1.0.0-arm-release.apk`. Then *Account → Server* →
+enter the current HTTPS address → *Test and save*.
+
+**EAS (optional, account required):** `mobile/eas.json` defines `preview` (internal APK) and
+`production` (Play AAB). Running `npx eas-cli@latest build -p android --profile preview` needs
+an Expo account login (free tier available); not run.

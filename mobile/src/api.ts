@@ -1,28 +1,69 @@
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 
-// Backend base URL, in priority order:
-// 1. EXPO_PUBLIC_API_BASE_URL (inlined at bundle time) — e.g. the HTTPS tunnel
-//    "https://<name>.trycloudflare.com/api" or a deployed host. Not a secret.
-// 2. Development: the laptop's LAN address that the Expo dev server runs on
+// Backend base URL (the same API the web app uses, i.e. ".../api"), in priority order:
+// 1. A server address saved on this device (Account → Server). Lets an installed
+//    build follow a changing address (e.g. a temporary HTTPS tunnel) without a rebuild.
+// 2. EXPO_PUBLIC_API_BASE_URL, inlined per build profile (eas.json) — use a stable
+//    HTTPS URL for distributed builds. Not a secret.
+// 3. Development only: the laptop's LAN address that the Expo dev server runs on
 //    (Constants.expoConfig.hostUri, e.g. "192.168.1.7:8081"), reaching the API
-//    through the web app's nginx on port 8080 under /api — port 8000 is
-//    deliberately not exposed on the network.
-// 3. Android emulator alias for the host machine.
-// "localhost" is never used: on a phone it is the phone itself.
-function resolveApiBaseUrl(): { url: string; source: string } {
-  const configured = process.env.EXPO_PUBLIC_API_BASE_URL;
-  if (configured) return { url: configured, source: "EXPO_PUBLIC_API_BASE_URL" };
-  const host = Constants.expoConfig?.hostUri?.split(":")[0];
-  if (host && host !== "localhost" && host !== "127.0.0.1") {
-    return { url: `http://${host}:8080/api`, source: "Expo dev server LAN host" };
-  }
-  return { url: "http://10.0.2.2:8080/api", source: "Android emulator default" };
+//    through nginx on port 8080 under /api (port 8000 is not exposed on the network).
+// Nothing else is guessed: no localhost (on a phone that is the phone itself) and
+// no emulator alias. Without a server, requests fail with an explanatory message.
+const SERVER_KEY = "pulse_server_url";
+let override: string | null = null;
+
+export function normaliseServerUrl(input: string): string {
+  let url = input.trim().replace(/\/+$/, "");
+  if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+  if (url && !/\/api$/i.test(url)) url = `${url}/api`;
+  return url;
 }
 
-const resolved = resolveApiBaseUrl();
-export const API_BASE_URL = resolved.url.replace(/\/$/, "");
-export const API_BASE_SOURCE = resolved.source;
+function resolveApiBaseUrl(): { url: string; source: string } {
+  if (override) return { url: override, source: "set on this device" };
+  const configured = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (configured) return { url: configured.replace(/\/$/, ""), source: "build configuration" };
+  const host = Constants.expoConfig?.hostUri?.split(":")[0];
+  if (host && host !== "localhost" && host !== "127.0.0.1") {
+    return { url: `http://${host}:8080/api`, source: "Expo dev server (LAN)" };
+  }
+  return { url: "", source: "not configured" };
+}
+
+export function apiBaseUrl(): string {
+  return resolveApiBaseUrl().url;
+}
+
+export function apiBaseSource(): string {
+  return resolveApiBaseUrl().source;
+}
+
+export async function loadServerOverride(): Promise<void> {
+  override = await SecureStore.getItemAsync(SERVER_KEY);
+}
+
+/** Check that `candidate` is a Bengaluru Pulse API, then save it on this device. */
+export async function setServerOverride(candidate: string | null): Promise<string | null> {
+  if (!candidate) {
+    override = null;
+    await SecureStore.deleteItemAsync(SERVER_KEY);
+    return null;
+  }
+  const url = normaliseServerUrl(candidate);
+  let ok = false;
+  try {
+    const res = await fetch(`${url}/health`, { headers: { Accept: "application/json" } });
+    ok = res.ok && (await res.json().catch(() => null))?.status === "ok";
+  } catch {
+    ok = false;
+  }
+  if (!ok) throw new ApiError(0, "server_unreachable", `No Bengaluru Pulse server answered at ${url}.`);
+  override = url;
+  await SecureStore.setItemAsync(SERVER_KEY, url);
+  return url;
+}
 
 const TOKEN_KEY = "pulse_token";
 let token: string | null = null;
@@ -47,7 +88,11 @@ export class ApiError extends Error {
 type Options = { method?: string; body?: unknown; params?: Record<string, string | number | undefined> };
 
 export async function api<T = any>(path: string, { method = "GET", body, params }: Options = {}): Promise<T> {
-  let url = API_BASE_URL + path;
+  const base = apiBaseUrl();
+  if (!base) {
+    throw new ApiError(0, "server_not_configured", "No server is set. Open Account → Server and enter the Bengaluru Pulse address.");
+  }
+  let url = base + path;
   if (params) {
     const qs = Object.entries(params)
       .filter(([, v]) => v !== undefined && v !== "")
@@ -62,7 +107,7 @@ export async function api<T = any>(path: string, { method = "GET", body, params 
   try {
     res = await fetch(url, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
   } catch {
-    throw new ApiError(0, "network_error", `Cannot reach the server at ${API_BASE_URL}.`);
+    throw new ApiError(0, "network_error", `Cannot reach the server at ${base}. Check the address in Account → Server.`);
   }
   if (res.status === 204) return null as T;
   const data: any = await res.json().catch(() => null);

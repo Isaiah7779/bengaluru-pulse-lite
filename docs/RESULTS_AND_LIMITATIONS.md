@@ -19,7 +19,7 @@ Synthetic test fixtures are never used as evidence here.
 | Community verification | complete | mechanism tested [test]; no real submissions |
 | Auth / roles / security | complete | yes [test, live] |
 | Web app | complete | yes — browser walkthrough [live] |
-| Mobile app | builds (iOS/Android bundles, Android debug APK) | **native app not run on a device**; the web app was verified on the owner's iPhone (Safari) |
+| Mobile app | builds (iOS bundle; Android release APK, signature verified) | **native app not run on a device**; the web app was verified on the owner's iPhone (Safari) and in emulated phone/tablet/desktop viewports |
 | Public deployment | configuration prepared | **not deployed** |
 
 ## 2. Routing

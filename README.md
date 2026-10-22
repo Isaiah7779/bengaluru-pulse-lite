@@ -28,6 +28,18 @@ so; nothing is simulated.
 | Admin: health, data freshness, moderation, model metrics, users, audit log | role checked in the backend |
 | Mobile app | Expo / React Native on the same API |
 
+## Supported platforms
+
+One backend API serves every client.
+
+| Platform | Use | Status |
+|---|---|---|
+| Any modern browser (Windows, macOS, Linux, Android, iPhone, iPad) | open the web app URL | responsive phone/tablet/desktop layouts; verified in Chromium and on an iPhone (Safari) |
+| Android | install the APK, then *Account → Server* | release APK built and verified; not yet installed on a device |
+| iPhone/iPad app | development/ad hoc build | prepared; needs a paid Apple Developer account (use Safari meanwhile) |
+
+Details: [docs/DEPLOYMENT_GUIDE.md §10](docs/DEPLOYMENT_GUIDE.md#10-platform-support).
+
 ## Repository layout
 
 ```

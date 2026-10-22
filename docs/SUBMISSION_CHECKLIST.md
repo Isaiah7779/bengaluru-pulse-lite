@@ -14,8 +14,9 @@
 | Presentation outline | `docs/PRESENTATION_OUTLINE.md` | done |
 | Supporting design docs | `docs/ARCHITECTURE.md`, `ROUTING.md`, `TRAFFIC.md`, `ML_PIPELINE.md`, `DATABASE.md`, `SECURITY.md`, `RESEARCH.md`, `RESEARCH_MILESTONE_FORECASTING.md` | done |
 | Audit trail | `docs/PROJECT_AUDIT.md`, `RELEASE_READINESS.md`, `FINAL_SYSTEM_AUDIT.md`, `PROJECT_STATUS.md` | done |
-| Source ZIP (submit this) | `dist/bengaluru-pulse-v2-r4-source-v3.zip` | verified — TEST_REPORT.md, "Packaging verification" |
-| Earlier ZIPs (kept, superseded) | `dist/bengaluru-pulse-v2-r4-source.zip`, `…-v2.zip` | first predates the mobile URL and iPhone results; v2 lacks the packaging record |
+| Source ZIP (submit this) | `dist/bengaluru-pulse-v2-r4-source-v4.zip` | verified — TEST_REPORT.md, "Packaging verification (v4)" |
+| Android APK (optional demo artifact) | `dist/bengaluru-pulse-v2-android-1.0.0-arm-release.apk` | built and verified; not installed on a device; not in the source ZIP |
+| Earlier ZIPs (kept, superseded) | `dist/bengaluru-pulse-v2-r4-source.zip`, `…-v2.zip`, `…-v3.zip` | predate the cross-platform work |
 | Slides (PowerPoint/PDF) | not produced — build from `PRESENTATION_OUTLINE.md` | **team** |
 | Screenshots for slides | not produced — capture from the running app | **team** |
 

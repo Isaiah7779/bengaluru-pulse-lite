@@ -1,10 +1,54 @@
 import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { api, BASIS_LABEL, fmtKm, fmtMin, saveToken } from "../api";
+import { api, apiBaseSource, apiBaseUrl, BASIS_LABEL, fmtKm, fmtMin, saveToken, setServerOverride } from "../api";
 import { Chip, colors, ErrorBox } from "../ui";
 
 type User = { id: number; email: string; display_name: string; role: string };
+
+function ServerSettings() {
+  const [current, setCurrent] = useState(apiBaseUrl());
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function save(value: string | null) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await setServerOverride(value);
+      setCurrent(apiBaseUrl());
+      setText("");
+      setMsg(value ? "Connected and saved." : "Reset to the default for this build.");
+    } catch (e: any) {
+      setMsg(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <View>
+      <Text style={styles.h}>Server</Text>
+      <Text style={styles.muted}>Using: {current || "not set"} ({apiBaseSource()})</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="e.g. https://<name>.trycloudflare.com"
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+        value={text}
+        onChangeText={setText}
+        accessibilityLabel="Server address"
+      />
+      <Pressable style={styles.secondary} onPress={() => save(text)} disabled={busy || !text.trim()}>
+        <Text>{busy ? "Checking…" : "Test and save"}</Text>
+      </Pressable>
+      <Pressable onPress={() => save(null)}>
+        <Text style={styles.link}>Use the default for this build</Text>
+      </Pressable>
+      {msg && <Text style={styles.line}>{msg}</Text>}
+    </View>
+  );
+}
 
 function SignIn({ onSignedIn }: { onSignedIn: (u: User) => void }) {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -113,7 +157,13 @@ function ReportIncident() {
 export default function AccountScreen({ user, onUser }: { user: User | null; onUser: (u: User | null) => void }) {
   const [trips, setTrips] = useState<any[]>([]);
   useEffect(() => { if (user) api("/v1/me/trips").then(setTrips).catch(() => setTrips([])); }, [user]);
-  if (!user) return <ScrollView contentContainerStyle={styles.page}><SignIn onSignedIn={onUser} /></ScrollView>;
+  if (!user)
+    return (
+      <ScrollView contentContainerStyle={styles.page}>
+        <SignIn onSignedIn={onUser} />
+        <ServerSettings />
+      </ScrollView>
+    );
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <Text style={styles.h}>{user.display_name} <Text style={styles.muted}>({user.role})</Text></Text>
@@ -128,6 +178,7 @@ export default function AccountScreen({ user, onUser }: { user: User | null; onU
       )) : <Text style={styles.muted}>Trips you plan while signed in are saved here.</Text>}
       <RecordTrip />
       <ReportIncident />
+      <ServerSettings />
     </ScrollView>
   );
 }

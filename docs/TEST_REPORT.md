@@ -183,3 +183,32 @@ files, verified by comparing every non-`docs/` member byte for byte, and was re-
 Not run from the extracted copy: `docker compose up --build` (would collide with the
 running stack's ports and needs the ≈ 1.4 GB road graphs, which are not in the ZIP) and the
 graph build itself (reproduced separately from scratch earlier the same day: exit 0, 14 min).
+
+
+## Cross-platform verification (22 Oct 2026, 15:45–16:40 UTC)
+
+Browser checks used the in-app Chromium browser with viewport emulation (touch emulation at
+phone width). No physical Android device, iPad, Mac or Linux desktop was available.
+
+| Check | Size / platform | Outcome |
+|---|---|---|
+| Route planning in the UI | 375×812 (phone, touch) | 2 routes on TomTom live traffic, cards and map shown |
+| Horizontal overflow | 375, 768, 1024, 1280 px wide | none (`scrollWidth` = viewport) |
+| Form text size (iOS focus-zoom) | phone | 14 px → **16 px** after fix |
+| Touch targets < 36 px | phone, touch | swap 33×28, steps link 28 px, header links 32 px → **none** after fix |
+| Header height | phone | 85 px (wrapped) → 61 px single line |
+| Layout | 768×1024 tablet | stacked map + panel; Traffic table fits (713 px) |
+| Layout | 1024×768 / 1280×800 | sidebar 420 px + map 604 / 860 px; desktop sizing unchanged |
+| Traffic and weather loading | tablet | 26/26 points fresh, incidents, weather areas shown |
+| API unavailable (network calls forced to fail in the tab) | tablet | map picks fall back to coordinates; planning shows "Cannot reach the Bengaluru Pulse server…"; form stays usable |
+| Production bundle API base | build | `/api`; no `localhost`/`127.0.0.1` URLs |
+| Frontend tests / build | — | **7 passed**; compiled successfully |
+| Mobile TypeScript | — | 0 errors |
+| Expo diagnostics | — | `expo-doctor` 20/20 |
+| iOS configuration + bundle | — | SDK 58.0.0, bundle id `org.bengalurupulse.app`, iPad supported, location text set; iOS bundle 640 modules |
+| Android release APK | — | `assembleRelease` exit 0; 34.6 MB; signature verifies; minSdk 24; arm64-v8a + armeabi-v7a; JS embedded; 0 secrets; no server URL baked in |
+| Android install / launch | — | **not tested** (no device or emulator) |
+| iOS native install / launch | — | **not tested** (needs paid Apple Developer account or Mac/Xcode) |
+| Firefox, Safari desktop, macOS, Linux | — | **not tested** (not available) |
+
+User-verified earlier: iPhone Safari via the tunnel URL and the LAN URL, with route planning.
