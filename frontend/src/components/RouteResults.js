@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { ROUTE_COLORS } from "../config";
 import { BASIS_LABEL, CLASS_LABEL, ago, clock, km, minutes, signedDelta } from "../format";
 
 function Badge({ kind }) {
@@ -29,7 +28,6 @@ function RouteCard({ route, selected, onSelect }) {
       className={`route-card ${selected ? "selected" : ""}`}
       onClick={() => onSelect(route.id)}
       aria-pressed={selected}
-      style={{ borderLeftColor: ROUTE_COLORS[(route.rank - 1) % ROUTE_COLORS.length] }}
     >
       <div className="rc-top">
         <span className="rc-eta">{minutes(route.eta_s)}</span>

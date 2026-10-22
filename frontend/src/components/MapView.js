@@ -1,9 +1,11 @@
 import { useEffect } from "react";
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
-import { BENGALURU_BOUNDS, BENGALURU_CENTER, CONGESTION_COLORS, ROUTE_COLORS, TILE_ATTRIBUTION, TILE_URL } from "../config";
+import { BENGALURU_BOUNDS, BENGALURU_CENTER, CONGESTION_COLORS, TILE_ATTRIBUTION, TILE_URL } from "../config";
 
 const toLatLng = (coords) => coords.map(([lon, lat]) => [lat, lon]);
-const routeColor = (r) => ROUTE_COLORS[(r.rank - 1) % ROUTE_COLORS.length];
+const SELECTED = "#6338D8";
+const ALTERNATE = "#302039";
+const shortLabel = (p) => (p.label || "").split(",")[0];
 
 function ClickPicker({ onPick }) {
   useMapEvents({
@@ -91,7 +93,7 @@ export default function MapView({
           <Polyline
             key={r.id}
             positions={toLatLng(r.geometry.coordinates)}
-            pathOptions={{ color: routeColor(r), weight: 5, opacity: 0.45 }}
+            pathOptions={{ color: ALTERNATE, weight: 5, opacity: 0.55, dashArray: "1 9", lineCap: "round" }}
             eventHandlers={{ click: () => onSelect && onSelect(r.id) }}
           >
             <Tooltip sticky>
@@ -101,8 +103,8 @@ export default function MapView({
         ))}
       {selected && (
         <>
-          <Polyline positions={toLatLng(selected.geometry.coordinates)} pathOptions={{ color: "#ffffff", weight: 10, opacity: 0.9 }} />
-          <Polyline positions={toLatLng(selected.geometry.coordinates)} pathOptions={{ color: routeColor(selected), weight: 6, opacity: 1 }} />
+          <Polyline positions={toLatLng(selected.geometry.coordinates)} pathOptions={{ color: "#FCF8F1", weight: 11, opacity: 0.95 }} />
+          <Polyline positions={toLatLng(selected.geometry.coordinates)} pathOptions={{ color: SELECTED, weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }} />
           {selected.incidents.map((i) => (
             <CircleMarker
               key={`ri-${i.id}`}
@@ -142,16 +144,16 @@ export default function MapView({
       ))}
 
       {origin && (
-        <CircleMarker center={[origin.lat, origin.lon]} radius={9} pathOptions={{ color: "#fff", weight: 3, fillColor: "#16a34a", fillOpacity: 1 }}>
-          <Tooltip permanent direction="top" offset={[0, -8]}>
-            A
+        <CircleMarker center={[origin.lat, origin.lon]} radius={9} pathOptions={{ color: "#FCF8F1", weight: 3, fillColor: "#17131C", fillOpacity: 1 }}>
+          <Tooltip permanent direction="top" offset={[0, -8]} className="pin-label">
+            <b>A</b> {shortLabel(origin)}
           </Tooltip>
         </CircleMarker>
       )}
       {destination && (
-        <CircleMarker center={[destination.lat, destination.lon]} radius={9} pathOptions={{ color: "#fff", weight: 3, fillColor: "#dc2626", fillOpacity: 1 }}>
-          <Tooltip permanent direction="top" offset={[0, -8]}>
-            B
+        <CircleMarker center={[destination.lat, destination.lon]} radius={9} pathOptions={{ color: "#FCF8F1", weight: 3, fillColor: "#FF702E", fillOpacity: 1 }}>
+          <Tooltip permanent direction="top" offset={[0, -8]} className="pin-label">
+            <b>B</b> {shortLabel(destination)}
           </Tooltip>
         </CircleMarker>
       )}

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import Icon from "../components/Icons";
+import InsightStrip from "../components/InsightStrip";
 import MapView from "../components/MapView";
 import PlaceSearch from "../components/PlaceSearch";
 import RouteResults from "../components/RouteResults";
@@ -13,6 +15,12 @@ const PREFERENCES = [
   ["balanced", "Balanced"],
 ];
 const VEHICLE_LABEL = { car: "Car", motorcycle: "Motorcycle", bicycle: "Bicycle", walk: "Walk" };
+const VEHICLE_ICON = { car: "car", motorcycle: "moto", bicycle: "bike", walk: "walk" };
+const LAYERS = [
+  ["traffic", "Monitored traffic"],
+  ["incidents", "Incidents"],
+  ["shortcuts", "Verified shortcuts"],
+];
 
 function localInputValue(date) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -104,7 +112,7 @@ export default function NavigatePage() {
       setResult(res);
       setSelectedId(res.recommended_route_id);
       // On narrow screens the results sit below the map and form: bring them into view.
-      if (window.matchMedia && window.matchMedia("(max-width: 860px)").matches) {
+      if (window.matchMedia && window.matchMedia("(max-width: 960px)").matches) {
         setTimeout(() => document.querySelector(".results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
       }
     } catch (err) {
@@ -121,152 +129,216 @@ export default function NavigatePage() {
     setResult(null);
   }
 
+  const selectedRoute = result ? result.routes.find((r) => r.id === selectedId) : null;
+
   return (
-    <div className="navigate">
-      <aside className="sidebar">
-        <form onSubmit={plan} className="route-form" aria-label="Plan a route">
-          <PlaceSearch
-            label="From"
-            value={origin}
-            onChange={(p) => {
-              setOrigin(p);
-              setResult(null);
-            }}
-            onPickOnMap={() => setPicking(picking === "origin" ? null : "origin")}
-            picking={picking === "origin"}
-            near={destination}
-          />
-          <button type="button" className="swap-btn" onClick={swap} aria-label="Swap start and destination">
-            ⇅
-          </button>
-          <PlaceSearch
-            label="To"
-            value={destination}
-            onChange={(p) => {
-              setDestination(p);
-              setResult(null);
-            }}
-            onPickOnMap={() => setPicking(picking === "destination" ? null : "destination")}
-            picking={picking === "destination"}
-            near={origin}
-          />
-          {picking && <div className="hint info">Click on the map to set the {picking === "origin" ? "start" : "destination"}.</div>}
+    <div className="nav-page">
+      <section className="nav-stage">
+        <div className="nav-left">
+          <header className="hero">
+            <p className="eyebrow">Bengaluru · Live city navigation</p>
+            <h1 className="hero-title">
+              Move smarter. <em>Bengaluru.</em>
+            </h1>
+            <p className="hero-copy">Live traffic. Smarter routes. Clearer decisions. A calmer city, together.</p>
+          </header>
 
-          <fieldset className="vehicles">
-            <legend className="field-label">Travel mode</legend>
-            {(vehicles.length ? vehicles : Object.keys(VEHICLE_LABEL).map((v) => ({ vehicle: v, available: true }))).map((v) => (
-              <label key={v.vehicle} className={`chip ${vehicle === v.vehicle ? "on" : ""} ${v.available === false ? "disabled" : ""}`}>
-                <input
-                  type="radio"
-                  name="vehicle"
-                  value={v.vehicle}
-                  checked={vehicle === v.vehicle}
-                  disabled={v.available === false}
-                  onChange={() => setVehicle(v.vehicle)}
-                />
-                {VEHICLE_LABEL[v.vehicle]}
-              </label>
-            ))}
-          </fieldset>
-          {vehicleInfo && vehicleInfo.profile_status !== "dedicated" && <div className="hint">{vehicleInfo.notes}</div>}
-          {vehicleInfo && vehicleInfo.available === false && <div className="hint error">This mode's routing graph is not running.</div>}
+          <form onSubmit={plan} className="route-form planner" aria-label="Plan a route">
+            <div className="planner-head">
+              <span className="eyebrow">Plan a journey</span>
+              <span className="planner-step" aria-hidden="true">
+                01
+              </span>
+            </div>
+            <div className="od-group">
+              <PlaceSearch
+                label="From"
+                value={origin}
+                onChange={(p) => {
+                  setOrigin(p);
+                  setResult(null);
+                }}
+                onPickOnMap={() => setPicking(picking === "origin" ? null : "origin")}
+                picking={picking === "origin"}
+                near={destination}
+              />
+              <button type="button" className="swap-btn" onClick={swap} aria-label="Swap start and destination" title="Swap">
+                <Icon name="swap" size={18} />
+              </button>
+              <PlaceSearch
+                label="To"
+                value={destination}
+                onChange={(p) => {
+                  setDestination(p);
+                  setResult(null);
+                }}
+                onPickOnMap={() => setPicking(picking === "destination" ? null : "destination")}
+                picking={picking === "destination"}
+                near={origin}
+              />
+            </div>
+            {picking && (
+              <div className="hint info" role="status">
+                Tap the map to set the {picking === "origin" ? "start" : "destination"}.
+              </div>
+            )}
 
-          <div className="row2">
-            <label>
-              <span className="field-label">Preference</span>
-              <select value={preference} onChange={(e) => setPreference(e.target.value)}>
-                {PREFERENCES.map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span className="field-label">Avoid</span>
-              <select value={avoid} onChange={(e) => setAvoid(e.target.value)} disabled={!avoidOptions.length}>
-                <option value="">Nothing</option>
-                {avoidOptions.map((a) => (
-                  <option key={a} value={a}>
-                    {a === "motorway" ? "Expressways" : a === "toll" ? "Toll roads" : "Ferries"}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+            <fieldset className="vehicles">
+              <legend className="field-label">Travel mode</legend>
+              {(vehicles.length ? vehicles : Object.keys(VEHICLE_LABEL).map((v) => ({ vehicle: v, available: true }))).map((v) => (
+                <label key={v.vehicle} className={`chip ${vehicle === v.vehicle ? "on" : ""} ${v.available === false ? "disabled" : ""}`}>
+                  <input
+                    type="radio"
+                    name="vehicle"
+                    value={v.vehicle}
+                    checked={vehicle === v.vehicle}
+                    disabled={v.available === false}
+                    onChange={() => setVehicle(v.vehicle)}
+                  />
+                  <Icon name={VEHICLE_ICON[v.vehicle]} size={18} />
+                  {VEHICLE_LABEL[v.vehicle]}
+                </label>
+              ))}
+            </fieldset>
+            {vehicleInfo && vehicleInfo.profile_status !== "dedicated" && <div className="hint">{vehicleInfo.notes}</div>}
+            {vehicleInfo && vehicleInfo.available === false && <div className="hint error">This mode's routing graph is not running.</div>}
 
-          <div className="row2">
-            <label>
-              <span className="field-label">Departure</span>
-              <select value={departMode} onChange={(e) => setDepartMode(e.target.value)}>
-                <option value="now">Leave now</option>
-                <option value="later">Leave at…</option>
-              </select>
-            </label>
-            {departMode === "later" && (
+            <div className="row2">
               <label>
-                <span className="field-label">Time</span>
-                <input
-                  type="datetime-local"
-                  value={departAt}
-                  min={localInputValue(new Date())}
-                  max={localInputValue(new Date(Date.now() + 7 * 86400 * 1000))}
-                  onChange={(e) => setDepartAt(e.target.value)}
-                />
+                <span className="field-label">Preference</span>
+                <select value={preference} onChange={(e) => setPreference(e.target.value)}>
+                  {PREFERENCES.map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="field-label">Avoid</span>
+                <select value={avoid} onChange={(e) => setAvoid(e.target.value)} disabled={!avoidOptions.length}>
+                  <option value="">Nothing</option>
+                  {avoidOptions.map((a) => (
+                    <option key={a} value={a}>
+                      {a === "motorway" ? "Expressways" : a === "toll" ? "Toll roads" : "Ferries"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="row2">
+              <label>
+                <span className="field-label">Departure</span>
+                <select value={departMode} onChange={(e) => setDepartMode(e.target.value)}>
+                  <option value="now">Leave now</option>
+                  <option value="later">Leave at…</option>
+                </select>
+              </label>
+              {departMode === "later" && (
+                <label>
+                  <span className="field-label">Time</span>
+                  <input
+                    type="datetime-local"
+                    value={departAt}
+                    min={localInputValue(new Date())}
+                    max={localInputValue(new Date(Date.now() + 7 * 86400 * 1000))}
+                    onChange={(e) => setDepartAt(e.target.value)}
+                  />
+                </label>
+              )}
+            </div>
+
+            {user && (
+              <label className="check">
+                <input type="checkbox" checked={saveTrip} onChange={(e) => setSaveTrip(e.target.checked)} /> Save to my trip history
               </label>
             )}
-          </div>
 
-          {user && (
-            <label className="check">
-              <input type="checkbox" checked={saveTrip} onChange={(e) => setSaveTrip(e.target.checked)} /> Save to my trip history
-            </label>
+            <button type="submit" className="primary plan-btn" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="spinner" aria-hidden="true" /> Finding routes…
+                </>
+              ) : (
+                <>
+                  Find routes <Icon name="arrow" size={18} />
+                </>
+              )}
+            </button>
+            {error && (
+              <div className="error-box" role="alert">
+                {error}
+              </div>
+            )}
+          </form>
+
+          {result && <RouteResults result={result} selectedId={selectedId} onSelect={setSelectedId} />}
+          {!result && !loading && (
+            <p className="muted small intro">
+              Routes come from OpenStreetMap via OSRM, timed with TomTom traffic where available. Every figure shows its source; nothing is
+              simulated.
+            </p>
           )}
-
-          <button type="submit" className="primary" disabled={loading}>
-            {loading ? "Finding routes…" : "Find routes"}
-          </button>
-          {error && (
-            <div className="error-box" role="alert">
-              {error}
-            </div>
-          )}
-        </form>
-
-        <div className="layers" aria-label="Map layers">
-          {[
-            ["traffic", "Monitored traffic"],
-            ["incidents", "Incidents"],
-            ["shortcuts", "Verified shortcuts"],
-          ].map(([key, label]) => (
-            <label key={key} className="check">
-              <input type="checkbox" checked={layers[key]} onChange={(e) => setLayers((l) => ({ ...l, [key]: e.target.checked }))} /> {label}
-            </label>
-          ))}
         </div>
 
-        {result && <RouteResults result={result} selectedId={selectedId} onSelect={setSelectedId} />}
-        {!result && !loading && (
-          <p className="muted small intro">
-            Routes come from OpenStreetMap via OSRM, timed with TomTom traffic where available. Every figure shows its source; nothing is
-            simulated.
-          </p>
-        )}
-      </aside>
-      <main className="map-wrap">
-        <MapView
-          routes={result ? result.routes : []}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          origin={origin}
-          destination={destination}
-          picking={picking}
-          onPick={onPick}
-          segments={layers.traffic ? segments : []}
-          incidents={layers.incidents ? incidents : []}
-          shortcuts={layers.shortcuts ? shortcuts : []}
-        />
-      </main>
+        <div className="nav-map">
+          <MapView
+            routes={result ? result.routes : []}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            origin={origin}
+            destination={destination}
+            picking={picking}
+            onPick={onPick}
+            segments={layers.traffic ? segments : []}
+            incidents={layers.incidents ? incidents : []}
+            shortcuts={layers.shortcuts ? shortcuts : []}
+          />
+          <div className="map-layers" aria-label="Map layers">
+            <Icon name="layers" size={16} />
+            {LAYERS.map(([key, label]) => (
+              <label key={key} className={`layer-pill ${layers[key] ? "on" : ""}`}>
+                <input type="checkbox" checked={layers[key]} onChange={(e) => setLayers((l) => ({ ...l, [key]: e.target.checked }))} /> {label}
+              </label>
+            ))}
+          </div>
+          {(result || layers.traffic || layers.incidents) && (
+          <div className="map-legend" aria-label="Map legend">
+            {result && (
+              <span>
+                <i className="lg-line lg-selected" /> Selected route
+              </span>
+            )}
+            {result && result.routes.length > 1 && (
+              <span>
+                <i className="lg-line lg-alt" /> Alternatives
+              </span>
+            )}
+            {layers.traffic && (
+              <>
+                <span>
+                  <i className="lg-dot sev-free" /> Free
+                </span>
+                <span>
+                  <i className="lg-dot sev-moderate" /> Moderate
+                </span>
+                <span>
+                  <i className="lg-dot sev-heavy" /> Heavy
+                </span>
+              </>
+            )}
+            {layers.incidents && (
+              <span>
+                <i className="lg-dot sev-severe" /> Incident
+              </span>
+            )}
+          </div>
+          )}
+        </div>
+      </section>
+
+      <InsightStrip selectedRoute={selectedRoute} onShowTraffic={() => setLayers((l) => ({ ...l, traffic: true }))} />
     </div>
   );
 }
