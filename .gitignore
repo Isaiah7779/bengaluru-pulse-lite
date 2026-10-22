@@ -34,6 +34,8 @@ data/osm/
 
 # Local data: OSM extracts, OSRM graphs, build logs, env backups
 data/
+# ...but not application source folders named "data"
+!frontend/src/data/
 backend/runtime/
 backend/models/
 
