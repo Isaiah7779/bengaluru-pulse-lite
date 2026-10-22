@@ -14,8 +14,8 @@
 | Presentation outline | `docs/PRESENTATION_OUTLINE.md` | done |
 | Supporting design docs | `docs/ARCHITECTURE.md`, `ROUTING.md`, `TRAFFIC.md`, `ML_PIPELINE.md`, `DATABASE.md`, `SECURITY.md`, `RESEARCH.md`, `RESEARCH_MILESTONE_FORECASTING.md` | done |
 | Audit trail | `docs/PROJECT_AUDIT.md`, `RELEASE_READINESS.md`, `FINAL_SYSTEM_AUDIT.md`, `PROJECT_STATUS.md` | done |
-| Source ZIP (current) | `dist/bengaluru-pulse-v2-r4-source-v2.zip` | see "ZIP" below |
-| Source ZIP (earlier, kept) | `dist/bengaluru-pulse-v2-r4-source.zip` | superseded; predates the mobile URL and iPhone results |
+| Source ZIP (submit this) | `dist/bengaluru-pulse-v2-r4-source-v3.zip` | verified — TEST_REPORT.md, "Packaging verification" |
+| Earlier ZIPs (kept, superseded) | `dist/bengaluru-pulse-v2-r4-source.zip`, `…-v2.zip` | first predates the mobile URL and iPhone results; v2 lacks the packaging record |
 | Slides (PowerPoint/PDF) | not produced — build from `PRESENTATION_OUTLINE.md` | **team** |
 | Screenshots for slides | not produced — capture from the running app | **team** |
 
@@ -50,9 +50,10 @@ ZIP, ≈ 1.4 GB) and supply their own TomTom key (optional).
 - [x] App verified running through nginx (http://localhost:8080) with readiness all `ok`
 - [x] README commands checked against the real files and scripts
 - [x] No secret values in tracked files or git history (checked by value, not printed)
-- [x] ZIP contents listed and scanned (see TEST_REPORT.md, "Packaging")
+- [x] ZIP contents listed, scanned, extracted and tested (see TEST_REPORT.md, "Packaging verification")
 - [ ] Slides prepared from PRESENTATION_OUTLINE.md (team)
 - [ ] Demo rehearsed with DEMO_SCRIPT.md on the presentation laptop (team)
+- [x] Web app verified on the owner's iPhone (Safari, tunnel and LAN URLs, route planning)
 - [ ] Decide on items needing approval (below)
 
 ## Decisions needing the owner's approval

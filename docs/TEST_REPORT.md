@@ -152,3 +152,34 @@ model listed as *candidate* with measured MAEs) → traffic page at 375 px width
 
 Mobile-web success on the iPhone shows the deployed web app works on the phone; it does
 **not** show that the native Expo app installs or launches on iOS.
+
+
+## Packaging verification (22 Oct 2026, 10:00–10:20 UTC)
+
+Archive built with `git archive` from the committed tree (tracked files only), excluding
+`backend/traffic.db` and `backend/traffic_model.pkl`. Final file:
+`dist/bengaluru-pulse-v2-r4-source-v3.zip` (contains this section). The checks below were
+**actually run** on `…-v2.zip` (commit `f143dd8`); `…-v3.zip` differs only in documentation
+files, verified by comparing every non-`docs/` member byte for byte, and was re-scanned.
+
+| Check (run on the archive / extracted copy) | Outcome |
+|---|---|
+| ZIP integrity (CRC of every member) | OK |
+| Members | 203 files, 5.6 MB uncompressed |
+| Forbidden paths (`.env`, `node_modules`, venvs, caches, build output, `mobile/android`, APK, databases, `data/`, OSRM graphs, keys/certificates) | none |
+| Real secret values from `backend/.env` (5 checked, not printed) | 0 members contain any |
+| Generic credential patterns (`api_key=`, `password=`, `token=` with long values) | none |
+| Required files (compose, Dockerfiles, migrations, scripts, templates, mobile config, submission docs) | 33/33 present |
+| Mobile API configuration (`EXPO_PUBLIC_API_BASE_URL`, dev-server LAN host, `expo-constants`) | present |
+| Extracted: `docker compose config` | valid; 7 services |
+| Extracted: production overlay config without production variables | refuses as designed (`PUBLIC_HOST` required) |
+| Extracted: `prepare_graphs.sh` | LF line endings; `bash -n` ok |
+| Extracted: `python -m compileall backend` | ok |
+| Extracted: backend `pytest` (no `.env` present; integration tests used the running local OSRM/PostGIS) | **115 passed** |
+| Extracted: mobile `npm ci` + `npx tsc --noEmit` | 464 packages installed; 0 errors |
+| Extracted: mobile `npx expo-doctor` | 20/20 passed |
+| Extracted: frontend `npm ci` + tests | 1,358 packages installed; **7 passed** |
+
+Not run from the extracted copy: `docker compose up --build` (would collide with the
+running stack's ports and needs the ≈ 1.4 GB road graphs, which are not in the ZIP) and the
+graph build itself (reproduced separately from scratch earlier the same day: exit 0, 14 min).
