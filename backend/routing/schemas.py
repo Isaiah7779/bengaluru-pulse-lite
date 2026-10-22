@@ -72,6 +72,9 @@ class RouteResult(BaseModel):
     recommended: bool = False
 
     intelligence_available: bool = False
+    
+    route_type: str = "alternative"
+    route_reason: str = ""
 
 
 class RouteResponse(BaseModel):

@@ -5,16 +5,20 @@ Stores prediction history for analytics and dashboard.
 """
 
 import sqlite3
+import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE_PATH = BASE_DIR / "traffic.db"
+DATABASE_PATH = Path(
+    os.getenv("TRAFFIC_DB_PATH", str(BASE_DIR / "traffic.db"))
+)
 
 
 class Database:
 
     def __init__(self):
+        DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(
             DATABASE_PATH,
             check_same_thread=False
@@ -85,7 +89,7 @@ class Database:
             VALUES(?,?,?,?,?,?,?)
             """,
             (
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                datetime.now(timezone.utc).isoformat(),
                 location,
                 traffic_volume,
                 average_speed,

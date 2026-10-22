@@ -528,10 +528,6 @@ function CommuteAdvisor({ locations = [] }) {
                 >
                   {result.departure_suggestions.map(
                     (suggestion, index) => {
-                      const color = getStatusColor(
-                        suggestion.status
-                      );
-
                       const isRecommended =
                         suggestion.recommended === true ||
                         suggestion.departure_time ===

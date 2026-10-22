@@ -487,6 +487,34 @@ function App() {
       [location]
     );
 
+
+    const geocodeBengaluru = async (query) => {
+  const response = await axios.get(
+    "https://photon.komoot.io/api/",
+    {
+      params: {
+        q: `${query}, Bengaluru, Karnataka, India`,
+        limit: 1,
+      },
+      timeout: 10000,
+    }
+  );
+
+  const feature = response.data?.features?.[0];
+
+  if (!feature?.geometry?.coordinates) {
+    throw new Error(
+      `Could not find "${query}" in Bengaluru.`
+    );
+  }
+
+  const [lon, lat] = feature.geometry.coordinates;
+
+  return {
+    lat: Number(lat),
+    lon: Number(lon),
+  };
+};
   // ============================================================
   // OSRM ROUTE CALCULATION
   // ============================================================
@@ -531,158 +559,17 @@ function App() {
       // Later we can replace this with Nominatim/Photon/etc.
       // ----------------------------------------------------------
 
-      const locations = {
-        // --------------------------------------------------------
-        // EAST BENGALURU
-        // --------------------------------------------------------
-
-        whitefield: {
-          lat: 12.9698,
-          lon: 77.7500,
-        },
-
-        "whitefield main road": {
-          lat: 12.9698,
-          lon: 77.7500,
-        },
-
-        brookefield: {
-          lat: 12.9650,
-          lon: 77.7150,
-        },
-
-        kundalahalli: {
-          lat: 12.9784,
-          lon: 77.7176,
-        },
-
-        marathahalli: {
-          lat: 12.9591,
-          lon: 77.7011,
-        },
-
-        "marathahalli bridge": {
-          lat: 12.9591,
-          lon: 77.7011,
-        },
-
-        "outer ring road": {
-          lat: 12.9517,
-          lon: 77.6885,
-        },
-
-        "k r puram": {
-          lat: 13.0070,
-          lon: 77.6950,
-        },
-
-        "kr puram": {
-          lat: 13.0070,
-          lon: 77.6950,
-        },
-
-        "kr puram railway station": {
-          lat: 13.0005,
-          lon: 77.6797,
-        },
-
-        // --------------------------------------------------------
-        // NORTH BENGALURU
-        // --------------------------------------------------------
-
-        hebbal: {
-          lat: 13.0358,
-          lon: 77.5970,
-        },
-
-        "hebbal flyover": {
-          lat: 13.0358,
-          lon: 77.5970,
-        },
-
-        // --------------------------------------------------------
-        // SOUTH BENGALURU
-        // --------------------------------------------------------
-
-        "silk board": {
-          lat: 12.9172,
-          lon: 77.6228,
-        },
-
-        "silk board junction": {
-          lat: 12.9172,
-          lon: 77.6228,
-        },
-
-        "electronic city": {
-          lat: 12.8452,
-          lon: 77.6602,
-        },
-
-        // --------------------------------------------------------
-        // CENTRAL BENGALURU
-        // --------------------------------------------------------
-
-        "mg road": {
-          lat: 12.9756,
-          lon: 77.6060,
-        },
-
-        "m g road": {
-          lat: 12.9756,
-          lon: 77.6060,
-        },
-
-        indiranagar: {
-          lat: 12.9784,
-          lon: 77.6408,
-        },
-
-        koramangala: {
-          lat: 12.9352,
-          lon: 77.6245,
-        },
-
-        jayanagar: {
-          lat: 12.9250,
-          lon: 77.5938,
-        },
-
-        // --------------------------------------------------------
-        // WEST BENGALURU
-        // --------------------------------------------------------
-
-        majestic: {
-          lat: 12.9762,
-          lon: 77.5713,
-        },
-
-        vijayanagar: {
-          lat: 12.9719,
-          lon: 77.5301,
-        },
-      };
-
+      
       // ----------------------------------------------------------
       // 4. Normalize user input
       // ----------------------------------------------------------
-
-      const originKey = originText
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ");
-
-      const destinationKey = destinationText
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ");
 
       // ----------------------------------------------------------
       // 5. Resolve coordinates
       // ----------------------------------------------------------
 
-      const origin = locations[originKey];
-      const destination = locations[destinationKey];
+      const origin = await geocodeBengaluru(originText);
+      const destination = await geocodeBengaluru(destinationText);
 
       // ----------------------------------------------------------
       // 6. Validate origin

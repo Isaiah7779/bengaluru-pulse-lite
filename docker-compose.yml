@@ -1,0 +1,46 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      OSRM_URL: ${OSRM_URL:-http://osrm:5000}
+      TOMTOM_API_KEY: ${TOMTOM_API_KEY:-}
+      TRAFFIC_DB_PATH: /app/runtime/traffic.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - traffic_data:/app/runtime
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        REACT_APP_API_BASE_URL: /api
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  osrm:
+    image: osrm/osrm-backend:v5.27.1
+    profiles: ["routing"]
+    command: osrm-routed --algorithm mld /data/bengaluru.osrm
+    volumes:
+      - ./data/osrm:/data:ro
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+volumes:
+  traffic_data:

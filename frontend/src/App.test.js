@@ -3,6 +3,9 @@ import axios from "axios";
 import App from "./App";
 
 jest.mock("axios");
+jest.mock("./components/TrafficMap", () => () => (
+  <div data-testid="traffic-map" />
+));
 
 beforeEach(() => {
   axios.get.mockImplementation((url) => {

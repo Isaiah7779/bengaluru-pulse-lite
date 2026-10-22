@@ -6,7 +6,7 @@ Get the entire system running in **under 3 minutes**.
 
 ## ✅ Prerequisites
 
-- **Python 3.8+** installed
+- **Python 3.11** installed (the bundled model was trained with scikit-learn 1.7.2)
 - **Node.js 16+** and npm installed
 - **Terminal** (cmd, PowerShell, or bash)
 
@@ -20,15 +20,19 @@ Get the entire system running in **under 3 minutes**.
 # Navigate to backend folder
 cd backend
 
-# Install Python dependencies (first time only)
+# Create and activate an isolated environment (first time only)
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 
 # Start the FastAPI server
-uvicorn main:app --reload
+python -m uvicorn main:app --reload
 ```
 
 ✅ **Backend is live at**: `http://127.0.0.1:8000`  
 📖 **API Docs**: `http://127.0.0.1:8000/docs`
+
+For road-network routing, start a local OSRM instance with the preprocessed Bengaluru graph and set `OSRM_URL` in `backend/.env`. The rest of the API, including prediction, remains available when OSRM or TomTom is unavailable.
 
 **Keep this terminal open!**
 

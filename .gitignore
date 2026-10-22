@@ -7,8 +7,10 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-v2/
 venv/
 env/
+tools/
 
 # Node
 node_modules/

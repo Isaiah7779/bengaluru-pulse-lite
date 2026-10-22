@@ -1,0 +1,10 @@
+.git/
+.venv/
+.venv-v2/
+tools/
+frontend/node_modules/
+frontend/build/
+backend/__pycache__/
+backend/tests/
+backend/*.db
+data/
