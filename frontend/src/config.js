@@ -1,5 +1,9 @@
 // Runtime configuration (CRA bakes REACT_APP_* in at build time).
-export const API_BASE_URL = (process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+// Default: same-origin "/api" in production builds (nginx proxies it to FastAPI, so the
+// web app works unchanged behind localhost, a LAN IP, a tunnel or a real domain);
+// the CRA dev server (npm start) talks to the backend directly on localhost:8000.
+const DEFAULT_API_BASE_URL = process.env.NODE_ENV === "production" ? "/api" : "http://localhost:8000";
+export const API_BASE_URL = (process.env.REACT_APP_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
 
 // OpenStreetMap standard tiles: free for light use with attribution
 // (https://operations.osmfoundation.org/policies/tiles/). Override for heavier use.

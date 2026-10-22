@@ -103,6 +103,10 @@ export default function NavigatePage() {
       const res = await api("/v1/routes", { method: "POST", body });
       setResult(res);
       setSelectedId(res.recommended_route_id);
+      // On narrow screens the results sit below the map and form: bring them into view.
+      if (window.matchMedia && window.matchMedia("(max-width: 860px)").matches) {
+        setTimeout(() => document.querySelector(".results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+      }
     } catch (err) {
       setResult(null);
       setError(err.message);
