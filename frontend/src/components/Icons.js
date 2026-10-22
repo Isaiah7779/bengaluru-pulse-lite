@@ -22,6 +22,10 @@ const PATHS = {
   layers: "M12 3 2 8l10 5 10-5-10-5ZM2 13l10 5 10-5M2 17.5 12 22l10-4.5",
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6",
   road: "M8 3 5 21M16 3l3 18M12 4v3M12 10v3M12 16v3",
+  home: "M4 11 12 4l8 7M6 9.5V20h4.5v-5.5h3V20H18V9.5",
+  book: "M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5v-15ZM5 19.5A1.5 1.5 0 0 0 6.5 21H19M9 7h6M9 10.5h6",
+  chart: "M4 20h16M7 17v-5M12 17V7M17 17v-8",
+  info: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 8v5m0-8.5v.01",
 };
 
 export default function Icon({ name, size = 20, className = "", title }) {

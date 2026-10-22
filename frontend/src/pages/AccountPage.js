@@ -136,7 +136,7 @@ const MOODS = [
   ["stressful", "Stressful"],
 ];
 
-function Journal() {
+export function Journal() {
   const [entries, setEntries] = useState(null);
   const [trips, setTrips] = useState([]);
   const blank = { id: null, title: "", body: "", mood: "", tripId: "" };

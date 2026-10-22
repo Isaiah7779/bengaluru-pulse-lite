@@ -67,6 +67,7 @@ test("admin link appears only for an admin user returned by the backend", async 
 });
 
 test("route form requires both places", async () => {
+  window.location.hash = "#/navigate";
   setToken("t");
   respond({ "/v1/vehicles": VEHICLES, "/v1/auth/me": ME_USER });
   render(<App />);

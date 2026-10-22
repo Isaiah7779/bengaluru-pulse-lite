@@ -7,20 +7,28 @@ import "./App.css";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import AuthScreen from "./components/AuthScreen";
 import Icon from "./components/Icons";
+import AboutPage from "./pages/AboutPage";
 import AccountPage from "./pages/AccountPage";
 import AdminPage from "./pages/AdminPage";
+import HomePage from "./pages/HomePage";
+import InsightsPage from "./pages/InsightsPage";
+import JournalPage from "./pages/JournalPage";
 import NavigatePage from "./pages/NavigatePage";
 import TrafficPage from "./pages/TrafficPage";
 
 const PAGES = {
+  home: { label: "Home", icon: "home" },
   navigate: { label: "Navigate", icon: "compass" },
   traffic: { label: "Traffic", icon: "pulse" },
+  insights: { label: "Insights", icon: "chart" },
+  journal: { label: "Journal", icon: "book" },
+  about: { label: "About", icon: "info" },
   account: { label: "My account", icon: "user" },
   admin: { label: "Admin", icon: "shield" },
 };
 
 function useHashPage() {
-  const read = () => (window.location.hash.replace("#/", "") || "navigate").split("?")[0];
+  const read = () => (window.location.hash.replace("#/", "") || "home").split("?")[0];
   const [page, setPage] = useState(read);
   useEffect(() => {
     const onHash = () => setPage(read());
@@ -38,13 +46,15 @@ function Shell() {
   // sign-in screen shows, so the user lands on the page they were heading to.
   if (status !== "ready" || !user) return <AuthScreen />;
 
-  const allowed = (p) => p === "navigate" || p === "traffic" || p === "account" || (p === "admin" && isAdmin);
-  const current = PAGES[page] && allowed(page) ? page : "navigate";
+  // Every page needs a signed-in user (above); Admin additionally needs the admin role,
+  // which the backend enforces again on every admin request.
+  const allowed = (p) => p !== "admin" || isAdmin;
+  const current = PAGES[page] && allowed(page) ? page : "home";
 
   return (
     <div className="shell">
       <aside className="rail">
-        <a className="rail-mark" href="#/navigate" aria-label="Bengaluru Pulse home">
+        <a className="rail-mark" href="#/home" aria-label="Bengaluru Pulse home">
           <span aria-hidden="true">B</span>
           <span aria-hidden="true">P</span>
         </a>
@@ -65,7 +75,7 @@ function Shell() {
 
       <div className="main">
         <header className="topline">
-          <a className="brand" href="#/navigate">
+          <a className="brand" href="#/home">
             Bengaluru Pulse
           </a>
           <span className="tagline">A calmer city tomorrow</span>
@@ -78,7 +88,7 @@ function Shell() {
               className="ghost-btn"
               onClick={async () => {
                 await logout();
-                go("navigate");
+                go("home");
               }}
             >
               <Icon name="logout" size={18} />
@@ -87,7 +97,11 @@ function Shell() {
           </div>
         </header>
         <div className="page-host" key={current}>
+          {current === "home" && <HomePage />}
           {current === "navigate" && <NavigatePage />}
+          {current === "insights" && <InsightsPage />}
+          {current === "journal" && <JournalPage />}
+          {current === "about" && <AboutPage />}
           {current === "traffic" && <TrafficPage />}
           {current === "account" && <AccountPage />}
           {current === "admin" && <AdminPage />}

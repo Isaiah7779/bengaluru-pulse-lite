@@ -63,7 +63,7 @@ function respond(map) {
 const ME = [200, { id: 7, email: "asha@pulse.example", display_name: "Asha", role: "user", created_at: "2026-10-01T00:00:00Z" }];
 
 beforeEach(() => {
-  window.location.hash = "";
+  window.location.hash = "#/navigate";
   jest.clearAllMocks();
 });
 

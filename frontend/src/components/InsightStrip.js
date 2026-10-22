@@ -42,7 +42,7 @@ function Card({ label, icon, children, className = "", loading }) {
   );
 }
 
-function TrafficCard() {
+export function TrafficCard() {
   const { data, error } = useLive(loadSegments);
   if (error) return <Card label="Live traffic" icon="pulse"><p className="insight-sub">Traffic data unavailable right now.</p></Card>;
   if (!data) return <Card label="Live traffic" icon="pulse" loading><div className="skeleton" /></Card>;
@@ -66,7 +66,7 @@ function TrafficCard() {
   );
 }
 
-function IncidentCard() {
+export function IncidentCard() {
   const { data, error } = useLive(loadIncidents);
   if (error) return <Card label="Road incidents" icon="alert"><p className="insight-sub">Incident feed unavailable.</p></Card>;
   if (!data) return <Card label="Road incidents" icon="alert" loading><div className="skeleton" /></Card>;
@@ -79,7 +79,7 @@ function IncidentCard() {
   );
 }
 
-function WeatherCard() {
+export function WeatherCard() {
   const { data, error } = useLive(loadWeather);
   if (error) return <Card label="Bengaluru weather" icon="cloud"><p className="insight-sub">Weather unavailable.</p></Card>;
   if (!data) return <Card label="Bengaluru weather" icon="cloud" loading><div className="skeleton" /></Card>;
