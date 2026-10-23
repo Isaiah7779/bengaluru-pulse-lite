@@ -97,9 +97,14 @@ services:
     restart: unless-stopped
 
   collector:
+    # Same code as the backend, so it shares the backend's image tag: rebuilding either
+    # service updates both, and the collector can never lag behind the schema.
+    image: bengalurupulselite-backend
     build:
       context: ./backend
-    command: ["sh", "-c", "python -m alembic upgrade head && python -m traffic.collector"]
+    # The backend owns database migrations (it runs `alembic upgrade head` before serving
+    # and only reports healthy afterwards), so the collector just waits for it.
+    command: ["python", "-m", "traffic.collector"]
     volumes:
       - models:/app/models
       - evaluations:/app/evaluation/v2
@@ -112,6 +117,8 @@ services:
       disable: true
     depends_on:
       postgres:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     restart: unless-stopped
 
