@@ -178,6 +178,10 @@ don't use it unless you intend to.
 * Guides: [USER_GUIDE](docs/USER_GUIDE.md) · [DEPLOYMENT_GUIDE](docs/DEPLOYMENT_GUIDE.md) · [QUICKSTART](QUICKSTART.md)
 * Review: [DEMO_SCRIPT](docs/DEMO_SCRIPT.md) · [PRESENTATION_OUTLINE](docs/PRESENTATION_OUTLINE.md) · [SUBMISSION_CHECKLIST](docs/SUBMISSION_CHECKLIST.md)
 * Design: [ARCHITECTURE](docs/ARCHITECTURE.md) · [ROUTING](docs/ROUTING.md) · [TRAFFIC](docs/TRAFFIC.md) · [ML_PIPELINE](docs/ML_PIPELINE.md) · [DATABASE](docs/DATABASE.md) · [SECURITY](docs/SECURITY.md) · [AUTHENTICATION](docs/AUTHENTICATION.md)
+For questions, collaborations, or feedback:
+- **Email**: crjordan436@gmail.com
+- **GitHub**: github.com/Isaiah7779
+- **LinkedIn**: Isaiah Melvin Issac
 
 ## Data and attribution
 
