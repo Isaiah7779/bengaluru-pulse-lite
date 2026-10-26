@@ -40,6 +40,9 @@ services:
   frontend:
     ports: !reset []
 
+  frontend4admin:
+    ports: !reset []
+
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
@@ -54,6 +57,8 @@ services:
       - caddy_config:/config
     depends_on:
       frontend:
+        condition: service_started
+      frontend4admin:
         condition: service_started
 
 volumes:

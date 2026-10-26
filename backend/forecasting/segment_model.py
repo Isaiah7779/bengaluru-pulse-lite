@@ -84,7 +84,10 @@ class SegmentForecaster:
         if row.empty:
             return None
         bundle = self.artifact["models"][horizon_label]
-        X = model_matrix(row, bundle["columns"], bundle["hist_table"], SEGMENTS).fillna(bundle["fill"])
+        X = model_matrix(row, bundle["columns"], bundle["hist_table"], SEGMENTS)
+        # Older saved artifacts carry their own training-derived fill values.
+        if "fill" in bundle:
+            X = X.fillna(bundle["fill"])
         value = float(np.clip(bundle["model"].predict(X)[0], *SEGMENTS.clip))
         return {
             "segment_id": segment_id,

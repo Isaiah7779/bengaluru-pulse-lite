@@ -14,7 +14,7 @@ x-backend-env: &backend-env
   OSRM_URL: http://osrm-car:5000
   OSRM_FOOT_URL: http://osrm-foot:5000
   OSRM_BICYCLE_URL: http://osrm-bicycle:5000
-  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000,http://127.0.0.1:3000}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001}
   LOG_JSON: "true"
   # Firebase Authentication (docs/AUTHENTICATION.md). Empty project ID = built-in sign-in only.
   FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
@@ -135,6 +135,24 @@ services:
         REACT_APP_FIREBASE_APP_ID: ${FIREBASE_WEB_APP_ID:-}
     ports:
       - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend4admin:
+    build:
+      context: .
+      dockerfile: frontend4admin/Dockerfile
+      args:
+        REACT_APP_API_BASE_URL: /api
+        PUBLIC_URL: /admin
+        REACT_APP_FIREBASE_API_KEY: ${FIREBASE_WEB_API_KEY:-}
+        REACT_APP_FIREBASE_AUTH_DOMAIN: ${FIREBASE_AUTH_DOMAIN:-}
+        REACT_APP_FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+        REACT_APP_FIREBASE_APP_ID: ${FIREBASE_WEB_APP_ID:-}
+    ports:
+      - "127.0.0.1:${ADMIN_PORT:-8081}:80"
     depends_on:
       backend:
         condition: service_healthy

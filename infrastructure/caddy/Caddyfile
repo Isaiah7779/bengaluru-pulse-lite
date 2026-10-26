@@ -6,6 +6,13 @@
 		Referrer-Policy no-referrer
 		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
 	}
-	# The frontend nginx serves the React build and proxies /api/* to FastAPI.
-	reverse_proxy frontend:80
+	# The admin React build is a separate static site under /admin.
+	redir /admin /admin/ 308
+	handle_path /admin/* {
+		reverse_proxy frontend4admin:80
+	}
+	# The commuter frontend nginx serves the existing app and proxies /api/* to FastAPI.
+	handle {
+		reverse_proxy frontend:80
+	}
 }

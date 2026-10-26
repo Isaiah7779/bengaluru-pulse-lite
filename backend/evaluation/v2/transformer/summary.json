@@ -1,0 +1,305 @@
+{
+  "generated_at": "2026-10-24T07:47:05.541406+00:00",
+  "status": "evaluated",
+  "target": "congestion",
+  "target_definition": "congestion at forecast origin + configured horizon (same as Stage 2)",
+  "input_sequence": {
+    "length_steps": 28,
+    "frequency": "D",
+    "includes_forecast_origin": true,
+    "feature_order": [
+      "congestion_value",
+      "observed_value_indicator",
+      "day_of_week_sin",
+      "day_of_week_cos",
+      "annual_day_sin",
+      "annual_day_cos"
+    ]
+  },
+  "preprocessing": {
+    "input_scaler": "StandardScaler fitted on training windows only",
+    "target_scaler": "StandardScaler fitted on training targets only",
+    "missing_history": "causal forward-fill; left padding uses earliest observation available at the origin; observation indicator retained"
+  },
+  "training_configuration": {
+    "sequence_length": 28,
+    "input_size": 6,
+    "d_model": 32,
+    "nhead": 4,
+    "num_layers": 2,
+    "dim_feedforward": 64,
+    "dropout": 0.1,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "batch_size": 256,
+    "max_epochs": 32,
+    "patience": 5,
+    "min_delta": 0.0001,
+    "seed": 42,
+    "min_train_samples": 128,
+    "device": "cpu",
+    "optimizer": "AdamW",
+    "loss": "Mean Squared Error",
+    "early_stopping": "validation scaled MSE; patience/min_delta; restore best validation checkpoint"
+  },
+  "data_validation": {
+    "rows_raw": 8936,
+    "missing_values_by_field": {
+      "time": 0,
+      "series": 0,
+      "congestion": 0
+    },
+    "invalid_numeric_by_field": {
+      "congestion": 0
+    },
+    "invalid_timestamps_dropped": 0,
+    "missing_series_dropped": 0,
+    "missing_or_invalid_target_dropped": 0,
+    "duplicates_dropped": 0,
+    "out_of_range_dropped": 0,
+    "share_at_cap_100": 0.4346,
+    "lag1_autocorrelation_mean": -0.0082,
+    "lag1_autocorrelation_range": [
+      -0.0742,
+      0.0684
+    ],
+    "dow_mean_spread": 1.147
+  },
+  "coverage": {
+    "series": 16,
+    "observed_rows_after_preprocessing": 8936,
+    "expected_series_time_cells": 15232,
+    "missing_series_time_cells": 6296,
+    "coverage_fraction": 0.5866596638655462,
+    "dataset_start": "2022-01-01 00:00:00+00:00",
+    "dataset_end": "2024-08-09 00:00:00+00:00",
+    "span_days": 951.0
+  },
+  "horizons": {
+    "1d": {
+      "population": {
+        "n_rows_per_model": 1791,
+        "unique_test_timestamps": 191,
+        "start": "2024-02-01 00:00:00+00:00",
+        "end": "2024-08-09 00:00:00+00:00",
+        "target_definition": "congestion"
+      },
+      "metrics": [
+        {
+          "model": "persistence",
+          "mae": 20.21665800449282,
+          "rmse": 29.123712217591766,
+          "r2": -0.5407347048963771,
+          "n": 1791
+        },
+        {
+          "model": "seasonal_naive",
+          "mae": 19.737464774864254,
+          "rmse": 28.52884208421299,
+          "r2": -0.47843655898881665,
+          "n": 1791
+        },
+        {
+          "model": "historical_average",
+          "mae": 15.984567631068733,
+          "rmse": 20.491836496917706,
+          "r2": 0.237225497726113,
+          "n": 1791
+        },
+        {
+          "model": "ridge",
+          "mae": 16.07911337141075,
+          "rmse": 20.605883661248576,
+          "r2": 0.22871143931695603,
+          "n": 1791
+        },
+        {
+          "model": "histogram_gradient_boosting",
+          "mae": 16.181478392482102,
+          "rmse": 20.710400587618345,
+          "r2": 0.2208673543492481,
+          "n": 1791
+        },
+        {
+          "model": "transformer",
+          "mae": 16.454337122699226,
+          "rmse": 20.782631054645705,
+          "r2": 0.21542320546826266,
+          "n": 1791
+        }
+      ],
+      "selected_gradient_boosting_configuration_on_validation": "hgb_lr0.05_l15",
+      "chronological_splits": {
+        "train": [
+          "2022-01-02 00:00:00+00:00",
+          "2023-09-11 00:00:00+00:00"
+        ],
+        "validation": [
+          "2023-09-12 00:00:00+00:00",
+          "2024-01-31 00:00:00+00:00"
+        ],
+        "test": [
+          "2024-02-01 00:00:00+00:00",
+          "2024-08-09 00:00:00+00:00"
+        ],
+        "sizes": {
+          "train": 5765,
+          "validation": 1364,
+          "test": 1791
+        }
+      },
+      "training": {
+        "epochs_completed": 9,
+        "best_epoch": 4,
+        "best_validation_mse_scaled": 0.7816290259361267,
+        "stopped_early": true,
+        "training_mse_scaled_by_epoch": [
+          1.0751077478074655,
+          0.8505184528730481,
+          0.8321995427168046,
+          0.8187138498501476,
+          0.8228760500318159,
+          0.814608880962792,
+          0.8108053778940352,
+          0.8077935744448527,
+          0.8108187596382314
+        ],
+        "validation_mse_scaled_by_epoch": [
+          0.7902207970619202,
+          0.7841479182243347,
+          0.7867089509963989,
+          0.7816290259361267,
+          0.7863050103187561,
+          0.7994258403778076,
+          0.7916293144226074,
+          0.7837419509887695,
+          0.781571090221405
+        ]
+      },
+      "training_samples": {
+        "train": 5765,
+        "validation": 1364,
+        "test": 1791
+      }
+    },
+    "7d": {
+      "population": {
+        "n_rows_per_model": 1774,
+        "unique_test_timestamps": 189,
+        "start": "2024-02-03 00:00:00+00:00",
+        "end": "2024-08-09 00:00:00+00:00",
+        "target_definition": "congestion"
+      },
+      "metrics": [
+        {
+          "model": "persistence",
+          "mae": 19.661352362397068,
+          "rmse": 28.414097940798143,
+          "r2": -0.46247919688027883,
+          "n": 1774
+        },
+        {
+          "model": "seasonal_naive",
+          "mae": 19.661352362397068,
+          "rmse": 28.414097940798143,
+          "r2": -0.46247919688027883,
+          "n": 1774
+        },
+        {
+          "model": "historical_average",
+          "mae": 16.00758474559672,
+          "rmse": 20.527514562678167,
+          "r2": 0.23670100819413842,
+          "n": 1774
+        },
+        {
+          "model": "ridge",
+          "mae": 16.09655505809442,
+          "rmse": 20.61207922866578,
+          "r2": 0.2303991171824168,
+          "n": 1774
+        },
+        {
+          "model": "histogram_gradient_boosting",
+          "mae": 16.262931542619118,
+          "rmse": 20.737217514245238,
+          "r2": 0.22102608130692147,
+          "n": 1774
+        },
+        {
+          "model": "transformer",
+          "mae": 16.342391066888283,
+          "rmse": 20.786256011024403,
+          "r2": 0.21733755592904747,
+          "n": 1774
+        }
+      ],
+      "selected_gradient_boosting_configuration_on_validation": "hgb_lr0.05_l15",
+      "chronological_splits": {
+        "train": [
+          "2022-01-08 00:00:00+00:00",
+          "2023-09-13 00:00:00+00:00"
+        ],
+        "validation": [
+          "2023-09-14 00:00:00+00:00",
+          "2024-02-02 00:00:00+00:00"
+        ],
+        "test": [
+          "2024-02-03 00:00:00+00:00",
+          "2024-08-09 00:00:00+00:00"
+        ],
+        "sizes": {
+          "train": 5727,
+          "validation": 1359,
+          "test": 1774
+        }
+      },
+      "training": {
+        "epochs_completed": 13,
+        "best_epoch": 8,
+        "best_validation_mse_scaled": 0.7591977715492249,
+        "stopped_early": true,
+        "training_mse_scaled_by_epoch": [
+          1.0529977347040251,
+          0.8486523692241946,
+          0.8337081831975697,
+          0.8281870546173588,
+          0.8248203878879797,
+          0.8191205474621384,
+          0.8148728909241877,
+          0.8085466043079463,
+          0.8013362619542568,
+          0.8086891797318683,
+          0.8019888578586102,
+          0.8028428792453923,
+          0.7952406904096688
+        ],
+        "validation_mse_scaled_by_epoch": [
+          0.7777488827705383,
+          0.76657634973526,
+          0.7665981650352478,
+          0.7623762488365173,
+          0.760339617729187,
+          0.760763943195343,
+          0.769309937953949,
+          0.7591977715492249,
+          0.7609196901321411,
+          0.765055775642395,
+          0.7606355547904968,
+          0.760360598564148,
+          0.7612560391426086
+        ]
+      },
+      "training_samples": {
+        "train": 5727,
+        "validation": 1359,
+        "test": 1774
+      }
+    }
+  },
+  "limitations": [
+    "The public daily dataset has undocumented provenance and incomplete series/date coverage.",
+    "A Transformer is an experiment; the short history and weak measured temporal structure may not support its added capacity.",
+    "Results apply only to this dataset and chronological holdout, not live road traffic."
+  ]
+}

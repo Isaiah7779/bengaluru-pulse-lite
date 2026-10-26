@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import csv
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -25,11 +29,126 @@ from db.models import (
     ShortcutCandidate,
     Trip,
     User,
+    ProviderCall,
+    TrafficObservation,
+    TrafficSegment,
+    WeatherObservation,
 )
 from db.session import get_db
 from traffic.state_engine import freshness_report
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+
+
+@router.get("/intelligence/overview")
+async def intelligence_overview(db: Session = Depends(get_db), settings: Settings = Depends(settings_dep)):
+    """Read-only operational summary. Collector state is inferred from persisted observations."""
+    from datetime import timedelta
+    from sqlalchemy import text
+
+    now = datetime.now(timezone.utc)
+    freshness = freshness_report(db, settings.observation_stale_minutes)
+    checks = await dependency_report(settings)
+    traffic_last = db.scalar(select(func.max(TrafficObservation.ingested_at)))
+    weather_last = db.scalar(select(func.max(WeatherObservation.ingested_at)))
+    incident_last = db.scalar(select(func.max(Incident.last_seen_at)))
+    recent_calls = db.scalars(select(ProviderCall).order_by(ProviderCall.called_at.desc()).limit(50)).all()
+    count_since = now - timedelta(hours=24)
+    traffic_24h = db.scalar(select(func.count(TrafficObservation.id)).where(TrafficObservation.ingested_at >= count_since)) or 0
+    weather_24h = db.scalar(select(func.count(WeatherObservation.id)).where(WeatherObservation.ingested_at >= count_since)) or 0
+    active_model = db.scalar(select(ModelVersion).where(ModelVersion.task == "segment_speed_ratio", ModelVersion.status == "active").order_by(ModelVersion.created_at.desc()).limit(1))
+
+    def age(ts):
+        if ts is None:
+            return None
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return max(0, int((now - ts).total_seconds()))
+
+    def iso(ts):
+        if ts is None:
+            return None
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return ts.isoformat()
+
+    # A successful SELECT 1 complements dependency_report's connection check.
+    db.execute(text("SELECT 1"))
+    return {
+        "generated_at": now.isoformat(),
+        "health_checks": checks,
+        "database_query": "ok",
+        "freshness": freshness,
+        "collectors": {
+            "enabled_setting": settings.collector_enabled,
+            "worker_liveness": "not_instrumented",
+            "enabled_setting_note": "COLLECTOR_ENABLED is not consulted by the separate collector process; service liveness is unknown.",
+            "flow": {"status": "not_configured" if not settings.tomtom_key else ("unknown" if traffic_last is None else ("fresh" if (age(traffic_last) or 0) <= settings.observation_stale_minutes * 60 else "stale")), "interval_minutes": settings.collector_flow_interval_minutes, "last_ingested_at": iso(traffic_last), "age_seconds": age(traffic_last), "observations_last_24h": traffic_24h},
+            "weather": {"status": "unknown" if weather_last is None else ("fresh" if (age(weather_last) or 0) <= settings.observation_stale_minutes * 60 else "stale"), "interval_minutes": settings.collector_weather_interval_minutes, "last_ingested_at": iso(weather_last), "age_seconds": age(weather_last), "observations_last_24h": weather_24h},
+            "incidents": {"status": "not_configured" if not settings.tomtom_key else ("unknown" if incident_last is None else ("fresh" if (age(incident_last) or 0) <= settings.collector_incident_interval_minutes * 120 else "stale")), "interval_minutes": settings.collector_incident_interval_minutes, "last_seen_at": iso(incident_last), "age_seconds": age(incident_last)},
+        },
+        "production_forecast_model": ({"status": "active_registry_entry", "name": active_model.name, "version": active_model.version, "algorithm": active_model.algorithm, "task": active_model.task, "created_at": iso(active_model.created_at), "runtime_artifact_load_status": "not_checked"} if active_model else {"status": "none_active", "message": "No active segment forecasting model is registered; research artifacts are not production models."}),
+        "request_metrics": {"status": "not_instrumented", "correlation_id": "X-Request-ID response header is available; request history and latency aggregates are not retained."},
+        "latest_provider_calls": [{"provider": c.provider, "endpoint": c.endpoint, "purpose": c.purpose, "called_at": iso(c.called_at), "status_code": c.status_code, "ok": c.ok} for c in recent_calls],
+        "telemetry_notes": ["Collector process liveness is not directly instrumented; freshness is derived from stored observations.", "Provider call records omit raw error text and credentials."],
+    }
+
+
+RESEARCH_DIR = Path(__file__).resolve().parents[1] / "evaluation" / "v2"
+
+
+@router.get("/intelligence/research/{horizon}")
+def intelligence_research(horizon: Literal["1d", "7d"], limit: int = Query(5000, ge=1, le=5000)):
+    """Serve generated research summaries and bounded actual prediction rows."""
+    data = {}
+    for label, folder in (("statistical", "statistical"), ("transformer", "transformer"), ("ensemble", "ensemble")):
+        summary = RESEARCH_DIR / folder / ("summary.json" if label != "ensemble" else f"{horizon}/summary.json")
+        if summary.is_file():
+            data[label] = json.loads(summary.read_text(encoding="utf-8"))
+            # Persisted reports may contain a workstation-specific absolute path.
+            if data[label].get("dataset"):
+                data[label]["dataset"] = Path(str(data[label]["dataset"]).replace("\\", "/")).name
+    prediction_path = RESEARCH_DIR / "ensemble" / horizon / "test_predictions.csv"
+    predictions = []
+    prediction_total = 0
+    if prediction_path.is_file():
+        with prediction_path.open(newline="", encoding="utf-8") as stream:
+            for row in csv.DictReader(stream):
+                prediction_total += 1
+                if len(predictions) < limit:
+                    predictions.append(row)
+    def read_rows(path: Path):
+        if not path.is_file():
+            return []
+        with path.open(newline="", encoding="utf-8") as stream:
+            return list(csv.DictReader(stream))
+
+    z_scores = [float(row["last_value_z_score"]) for row in read_rows(RESEARCH_DIR / "statistical" / horizon / "z_score_distribution.csv") if row.get("last_value_z_score")][:10000]
+    error_by_series = read_rows(RESEARCH_DIR / "statistical" / horizon / "error_by_series.csv")[:5000]
+    dataset_path = Path(data.get("ensemble", {}).get("dataset", ""))
+    if not dataset_path.is_file():
+        dataset_path = RESEARCH_DIR.parents[1] / "Banglore_traffic_Dataset.csv"
+    try:
+        with dataset_path.open(newline="", encoding="utf-8") as stream:
+            dataset_columns = len(next(csv.reader(stream)))
+    except (OSError, StopIteration):
+        dataset_columns = None
+    return {"generated_at": datetime.now(timezone.utc).isoformat(), "horizon": horizon, "reports": data, "predictions": predictions, "prediction_count": len(predictions), "prediction_total": prediction_total, "predictions_truncated": prediction_total > len(predictions), "z_scores": z_scores, "error_by_series": error_by_series, "dataset_columns": dataset_columns}
+
+
+@router.get("/intelligence/endpoints")
+def intelligence_endpoints(request: Request):
+    """Inventory the actual FastAPI route table without reading settings or secrets."""
+    endpoints = []
+    for path, operations in request.app.openapi().get("paths", {}).items():
+        if not path.startswith("/v1/"):
+            continue
+        for method, operation in operations.items():
+            if method.upper() not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+                continue
+            description = operation.get("summary") or operation.get("description") or ""
+            endpoints.append({"path": path, "method": method.upper(), "description": description.splitlines()[0][:180]})
+    return {"generated_at": datetime.now(timezone.utc).isoformat(), "endpoints": sorted(endpoints, key=lambda x: (x["path"], x["method"]))}
 
 
 def user_dict(u: User) -> dict:

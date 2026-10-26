@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     log_json: bool = False
 
     cors_origins_raw: str = Field(
-        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:8080",
         alias="CORS_ORIGINS",
     )
 

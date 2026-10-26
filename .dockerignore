@@ -4,6 +4,11 @@
 tools/
 frontend/node_modules/
 frontend/build/
+frontend4admin/node_modules/
+frontend4admin/build/
+frontend4admin/.env
+frontend4admin/.env.local
+frontend4admin/.env.*.local
 backend/__pycache__/
 backend/tests/
 backend/*.db

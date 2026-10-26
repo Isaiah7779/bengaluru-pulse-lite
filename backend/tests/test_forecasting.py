@@ -14,7 +14,7 @@ import pytest
 from db.models import EvaluationRecord, ModelVersion, TrafficObservation, TrafficSegment
 from db.session import session_scope
 from forecasting import pipeline
-from forecasting.pipeline import SEGMENTS, chronological_split, metrics, supervised, to_grid
+from forecasting.pipeline import SEGMENTS, _fit_predict, candidates, chronological_split, load_research, metrics, supervised, to_grid
 
 
 def synthetic_segments(days=21, segments=3, seed=0, signal=True) -> pd.DataFrame:
@@ -36,6 +36,58 @@ def synthetic_segments(days=21, segments=3, seed=0, signal=True) -> pd.DataFrame
 def test_metrics_basic():
     m = metrics(np.array([1.0, 2.0, 3.0]), np.array([1.0, 2.0, 5.0]))
     assert m["mae"] == pytest.approx(2 / 3) and m["rmse"] == pytest.approx((4 / 3) ** 0.5) and m["n"] == 3
+
+
+def test_research_loader_accepts_compatible_schema_and_converts_values(tmp_path):
+    source = tmp_path / "compatible.csv"
+    pd.DataFrame({
+        "Timestamp": ["2024-01-01", "2024-01-02"],
+        "Series": [" road A ", "road A"],
+        "Target": ["12.5", "80"],
+    }).to_csv(source, index=False)
+    frame, report = load_research(source)
+    assert list(frame.columns) == ["series", "time", "congestion"]
+    assert frame["series"].tolist() == ["road A", "road A"]
+    assert frame["congestion"].tolist() == [12.5, 80.0]
+    assert str(frame["time"].dtype).endswith(", UTC]")
+    assert report["invalid_numeric_by_field"]["congestion"] == 0
+
+
+def test_research_loader_reports_and_drops_invalid_values(tmp_path):
+    source = tmp_path / "invalid.csv"
+    pd.DataFrame({
+        "Date": ["2024-01-01", "not-a-date", "2024-01-03", "2024-01-04"],
+        "Area Name": [" A ", "A", "A", None],
+        "Road/Intersection Name": ["R", "R", "R", "R"],
+        "Congestion Level": ["25.5", "30", "not-numeric", "45"],
+    }).to_csv(source, index=False)
+    frame, report = load_research(source)
+    assert len(frame) == 1 and frame.iloc[0]["congestion"] == 25.5
+    assert report["invalid_timestamps_dropped"] == 1
+    assert report["missing_series_dropped"] == 1
+    assert report["invalid_numeric_by_field"]["congestion"] == 1
+    assert report["missing_or_invalid_target_dropped"] == 1
+    assert report["missing_values_by_field"]["congestion"] == 0
+
+
+def test_research_loader_rejects_missing_required_fields(tmp_path):
+    source = tmp_path / "missing.csv"
+    pd.DataFrame({"Date": ["2024-01-01"], "Congestion Level": [25]}).to_csv(source, index=False)
+    with pytest.raises(ValueError, match="Missing required fields.*series"):
+        load_research(source)
+
+
+def test_imputation_and_zscore_fit_only_on_chronological_training_rows():
+    candidate = next(c for c in candidates() if c.name == "ridge")
+    model = candidate.factory()
+    train = pd.DataFrame({"feature": [1.0, 3.0, np.nan], "other": [10.0, 20.0, 30.0]})
+    evaluate = pd.DataFrame({"feature": [1000.0], "other": [1000.0]})
+    _fit_predict(model, train, np.array([1.0, 2.0, 3.0]), evaluate)
+    imputer = model.named_steps["simpleimputer"]
+    scaler = model.named_steps["standardscaler"]
+    assert imputer.statistics_.tolist() == pytest.approx([2.0, 20.0])
+    assert scaler.mean_.tolist() == pytest.approx([2.0, 20.0])
+    assert scaler.scale_.tolist() == pytest.approx([np.sqrt(2 / 3), np.sqrt(200 / 3)])
 
 
 def test_split_is_chronological_and_features_have_no_future_leakage():
@@ -78,9 +130,7 @@ def test_noise_only_series_is_not_activated(tmp_path, monkeypatch):
 
 
 def _fast_candidates():
-    from sklearn.linear_model import Ridge
-
-    return [pipeline.Candidate("ridge", lambda: Ridge(alpha=1.0), {"alpha": 1.0})]
+    return [c for c in candidates() if c.name == "ridge"]
 
 
 def test_active_model_serves_forecasts_within_evaluated_horizons(tmp_path, monkeypatch):

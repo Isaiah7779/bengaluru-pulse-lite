@@ -1,0 +1,81 @@
+{
+  "horizon": "7d",
+  "population": {
+    "n_rows_per_model": 1774,
+    "unique_test_timestamps": 189,
+    "start": "2024-02-03 00:00:00+00:00",
+    "end": "2024-08-09 00:00:00+00:00",
+    "target_definition": "congestion"
+  },
+  "models": {
+    "persistence": {
+      "mae": 19.661352362397068,
+      "rmse": 28.414097940798143,
+      "r2": -0.46247919688027883,
+      "n": 1774,
+      "configuration": "latest observed value at the forecast origin"
+    },
+    "seasonal_naive": {
+      "mae": 19.661352362397068,
+      "rmse": 28.414097940798143,
+      "r2": -0.46247919688027883,
+      "n": 1774,
+      "configuration": "same weekly slot (7-step season)"
+    },
+    "historical_average": {
+      "mae": 16.007584745596716,
+      "rmse": 20.527514562678167,
+      "r2": 0.23670100819413842,
+      "n": 1774,
+      "configuration": "series and weekday means, estimated from train + validation"
+    },
+    "ridge": {
+      "mae": 16.09655505809442,
+      "rmse": 20.61207922866578,
+      "r2": 0.2303991171824168,
+      "n": 1774,
+      "configuration": "Ridge(alpha=1.0)"
+    },
+    "histogram_gradient_boosting": {
+      "mae": 16.262931542619118,
+      "rmse": 20.737217514245238,
+      "r2": 0.22102608130692147,
+      "n": 1774,
+      "configuration": "hgb_lr0.05_l15"
+    }
+  },
+  "z_score": {
+    "feature": "last_value (latest observed congestion at forecast origin)",
+    "population": "test rows with target_time in the held-out period",
+    "scaler_fit_population": "training + validation predictor rows only",
+    "scaler": "StandardScaler from the Ridge preprocessing pipeline; median imputation precedes scaling",
+    "n": 1774,
+    "mean": 0.086687905656927,
+    "standard_deviation_population": 0.9681424576842823
+  },
+  "error_by_series": {
+    "minimum_group_samples": 30,
+    "supported_series": 16,
+    "plot_generated": true
+  },
+  "chronological_splits": {
+    "train": [
+      "2022-01-08 00:00:00+00:00",
+      "2023-09-13 00:00:00+00:00"
+    ],
+    "validation": [
+      "2023-09-14 00:00:00+00:00",
+      "2024-02-02 00:00:00+00:00"
+    ],
+    "test": [
+      "2024-02-03 00:00:00+00:00",
+      "2024-08-09 00:00:00+00:00"
+    ],
+    "sizes": {
+      "train": 5727,
+      "validation": 1359,
+      "test": 1774
+    }
+  },
+  "selected_gradient_boosting_configuration_on_validation": "hgb_lr0.05_l15"
+}

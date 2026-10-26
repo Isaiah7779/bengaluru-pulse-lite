@@ -28,6 +28,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -147,30 +148,70 @@ SEGMENTS = TaskConfig(
 # ---------------------------------------------------------------------------
 
 
+def _normalized_column_name(value: str) -> str:
+    return "".join(ch for ch in str(value).casefold() if ch.isalnum())
+
+
 def load_research(path: Path) -> Tuple[pd.DataFrame, Dict]:
-    raw = pd.read_csv(path, parse_dates=["Date"])
+    """Load compatible CSV variants into canonical time/series/target columns."""
+    raw = pd.read_csv(path)
     report: Dict = {"rows_raw": int(len(raw))}
-    raw["series"] = raw["Area Name"].str.strip() + " | " + raw["Road/Intersection Name"].str.strip()
-    df = raw.rename(columns={"Date": "time", "Congestion Level": "congestion"})[["series", "time", "congestion"]]
+    aliases = {
+        "time": ("date", "time", "timestamp", "datetime", "observedat"),
+        "series": ("series", "seriesid", "roadseries"),
+        "area": ("area", "areaname", "locality", "neighbourhood"),
+        "road": ("road", "roadname", "roadintersectionname", "intersection", "intersectionname"),
+        "congestion": ("congestion", "congestionlevel", "target", "targetvalue"),
+    }
+    normalized = {_normalized_column_name(c): c for c in raw.columns}
+    columns = {key: next((normalized[c] for c in choices if c in normalized), None)
+               for key, choices in aliases.items()}
+    missing = [key for key in ("time", "congestion") if columns[key] is None]
+    if columns["series"] is None and (columns["area"] is None or columns["road"] is None):
+        missing.append("series (or both area and road)")
+    if missing:
+        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+
+    df = pd.DataFrame(index=raw.index)
+    df["time"] = pd.to_datetime(raw[columns["time"]], errors="coerce", utc=True)
+    df["congestion"] = pd.to_numeric(raw[columns["congestion"]], errors="coerce")
+    if columns["series"] is not None:
+        df["series"] = raw[columns["series"]].astype("string").str.strip()
+    else:
+        area, road = (raw[columns[key]].astype("string").str.strip() for key in ("area", "road"))
+        df["series"] = area + " | " + road
+    df["series"] = df["series"].replace("", pd.NA)
+    report["missing_values_by_field"] = {
+        "time": int(df.time.isna().sum()), "series": int(df.series.isna().sum()),
+        "congestion": int(raw[columns["congestion"]].isna().sum()),
+    }
+    bad_numeric = raw[columns["congestion"]].notna() & df.congestion.isna()
+    report["invalid_numeric_by_field"] = {"congestion": int(bad_numeric.sum())}
+    bad_time, bad_series, bad_target = df.time.isna(), df.series.isna(), df.congestion.isna()
+    report["invalid_timestamps_dropped"] = int(bad_time.sum())
+    report["missing_series_dropped"] = int(bad_series.sum())
+    report["missing_or_invalid_target_dropped"] = int(bad_target.sum())
+    df = df.loc[~(bad_time | bad_series | bad_target), ["series", "time", "congestion"]].copy()
     report["duplicates_dropped"] = int(df.duplicated(["series", "time"]).sum())
     df = df.drop_duplicates(["series", "time"])
-    report["nulls_dropped"] = int(df["congestion"].isna().sum())
-    df = df.dropna(subset=["congestion"])
-    out_of_range = ~df["congestion"].between(0, 100)
-    report["out_of_range_dropped"] = int(out_of_range.sum())
-    df = df[~out_of_range]
-    report["share_at_cap_100"] = round(float((df["congestion"] >= 100).mean()), 4)
+    bad_range = ~df.congestion.between(0, 100)
+    report["out_of_range_dropped"] = int(bad_range.sum())
+    df = df.loc[~bad_range].reset_index(drop=True)
+    report["share_at_cap_100"] = round(float((df.congestion >= 100).mean()), 4) if not df.empty else None
     lag1 = []
-    for _, g in df.sort_values("time").groupby("series"):
-        s = g["congestion"].to_numpy()
-        if len(s) > 30:
-            lag1.append(float(np.corrcoef(s[:-1], s[1:])[0, 1]))
-    report["lag1_autocorrelation_mean"] = round(float(np.mean(lag1)), 4)
-    report["lag1_autocorrelation_range"] = [round(min(lag1), 4), round(max(lag1), 4)]
-    report["dow_mean_spread"] = round(float(df.groupby(df.time.dt.dayofweek)["congestion"].mean().agg(np.ptp)), 3)
+    for _, group in df.sort_values("time").groupby("series"):
+        values = group.congestion.to_numpy()
+        if len(values) > 30:
+            corr = np.corrcoef(values[:-1], values[1:])[0, 1]
+            if np.isfinite(corr):
+                lag1.append(float(corr))
+    report["lag1_autocorrelation_mean"] = round(float(np.mean(lag1)), 4) if lag1 else None
+    report["lag1_autocorrelation_range"] = [round(min(lag1), 4), round(max(lag1), 4)] if lag1 else None
+    report["dow_mean_spread"] = round(float(df.groupby(df.time.dt.dayofweek).congestion.mean().agg(np.ptp)), 3) if not df.empty else None
     return df, report
 
 
+
 def load_segments() -> Tuple[pd.DataFrame, Dict]:
     from sqlalchemy import select
 
@@ -303,27 +344,25 @@ class Candidate:
 
 
 def candidates() -> List[Candidate]:
-    out = [Candidate("ridge", lambda: make_pipeline(StandardScaler(), Ridge(alpha=1.0)), {"alpha": 1.0})]
+    def standardized(estimator):
+        # Imputation medians and Z-score statistics are fitted on training rows only.
+        return make_pipeline(SimpleImputer(strategy="median", keep_empty_features=True), StandardScaler(), estimator)
+
+    out = [Candidate("ridge", lambda: standardized(Ridge(alpha=1.0)), {"alpha": 1.0})]
     for lr in (0.05, 0.1):
         for leaves in (15, 31):
             params = {"learning_rate": lr, "max_leaf_nodes": leaves, "max_iter": 300, "l2_regularization": 1.0}
             out.append(Candidate(
                 f"hgb_lr{lr}_l{leaves}",
-                lambda p=params: HistGradientBoostingRegressor(random_state=SEED, early_stopping=False, **p),
+                lambda p=params: standardized(HistGradientBoostingRegressor(random_state=SEED, early_stopping=False, **p)),
                 params,
             ))
     return out
 
 
 def _fit_predict(model, X_train, y_train, X_eval):
-    X_train = X_train.fillna(X_train.median(numeric_only=True))
     model.fit(X_train, y_train)
-    return model.predict(X_eval.fillna(X_train.median(numeric_only=True)))
-
-
-# ---------------------------------------------------------------------------
-# experiment
-# ---------------------------------------------------------------------------
+    return model.predict(X_eval)
 
 
 def run_horizon(grid: pd.DataFrame, cfg: TaskConfig, label: str, steps: int) -> Dict:
@@ -376,7 +415,7 @@ def run_horizon(grid: pd.DataFrame, cfg: TaskConfig, label: str, steps: int) -> 
     result["selected_params"] = best_cand.params
     result["best_baseline"] = best_baseline[0]
     result["test_improvement_vs_best_baseline"] = round(improvement, 4)
-    result["_artifact"] = {"model": final, "columns": cols, "hist_table": table_tv, "fill": X_tv.median(numeric_only=True)}
+    result["_artifact"] = {"model": final, "columns": cols, "hist_table": table_tv, "preprocessing": "median-impute + training-fitted Z-score"}
     return result
 
 
