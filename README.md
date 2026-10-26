@@ -59,7 +59,7 @@ docker-compose.prod.yml      production overlay (HTTPS, single server)
 * Docker Desktop (Compose v2.24+). Allocate ≥ 4 GB RAM; ≈ 5 GB free disk for images, graphs and the OSM download.
 * Git and a Bash shell (Git Bash on Windows) for the graph-build script.
 * Internet access for the first build (Docker images, Geofabrik OSM extract).
-* Optional: a free TomTom developer API key for live traffic; Python 3.12 and Node 22 for running tests outside Docker.
+* Optional: a free TomTom developer API key for live traffic; Python 3.12 and Node 24.12.0 or newer for running frontend tests outside Docker.
 
 ## Installation
 
