@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 800 700" role="img" aria-label="">
+  <!-- Original artwork for Bengaluru Pulse: botanical forms (gulmohar blossoms, palm and
+       fern fronds, broad leaves) around Bengaluru silhouettes (a domed civic hall, a temple
+       gopuram, modern towers) with orange, violet and plum ink-wash. No third-party imagery. -->
+  <defs>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFC59E"/>
+      <stop offset="0.45" stop-color="#F47735"/>
+      <stop offset="1" stop-color="#F47735" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="wash" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5925B5"/>
+      <stop offset="0.6" stop-color="#4A1F7E"/>
+      <stop offset="1" stop-color="#30152F"/>
+    </linearGradient>
+    <linearGradient id="warm" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F47735"/>
+      <stop offset="1" stop-color="#C9512A"/>
+    </linearGradient>
+    <filter id="ink" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.03" numOctaves="3" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="38"/>
+    </filter>
+    <path id="leaf" d="M0 0C28-34 88-38 124 0C88 38 28 34 0 0Z"/>
+    <path id="leaflet" d="M0 0C10-9 30-10 44 0C30 10 10 9 0 0Z"/>
+    <path id="petal" d="M0 0C-9-10-8-24 0-30C8-24 9-10 0 0Z"/>
+    <g id="flower">
+      <use href="#petal" xlink:href="#petal"/>
+      <use href="#petal" xlink:href="#petal" transform="rotate(72)"/>
+      <use href="#petal" xlink:href="#petal" transform="rotate(144)"/>
+      <use href="#petal" xlink:href="#petal" transform="rotate(216)"/>
+      <use href="#petal" xlink:href="#petal" transform="rotate(288)"/>
+      <circle r="5" fill="#FFE2A8"/>
+    </g>
+    <g id="frond">
+      <path d="M0 0C60-20 140-30 230-90" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      <use href="#leaflet" xlink:href="#leaflet" transform="translate(30 -9) rotate(-60)"/>
+      <use href="#leaflet" xlink:href="#leaflet" transform="translate(30 -9) rotate(40)"/>
+      <use href="#leaflet" xlink:href="#leaflet" transform="translate(70 -19) rotate(-66)"/>
+      <use href="#leaflet" xlink:href="#leaflet" transform="translate(70 -19) rotate(32)"/>
+      <use href="#leaflet" xlink:href="#leaflet" transform="translate(110 -30) rotate(-72)"/>
+      <use href="#leaflet" xlink:href="#leaflet" transform="translate(110 -30) rotate(24)"/>
+      <use href="#leaflet" xlink:href="#leaflet" transform="translate(150 -46) rotate(-80)"/>
+      <use href="#leaflet" xlink:href="#leaflet" transform="translate(150 -46) rotate(14)"/>
+      <use href="#leaflet" xlink:href="#leaflet" transform="translate(190 -66) rotate(-88)"/>
+      <use href="#leaflet" xlink:href="#leaflet" transform="translate(190 -66) rotate(4)"/>
+    </g>
+  </defs>
+
+  <!-- sun and ink-wash grounds -->
+  <circle cx="470" cy="250" r="210" fill="url(#sun)"/>
+  <path filter="url(#ink)" fill="url(#wash)" opacity="0.92"
+        d="M40 420C120 330 250 360 330 300S540 250 620 330 790 420 780 520 640 690 470 690 90 700 40 600Z"/>
+  <path filter="url(#ink)" fill="#F47735" opacity="0.55" d="M520 120C600 80 720 110 760 190S720 330 640 320 470 250 520 120Z"/>
+
+  <!-- city silhouettes -->
+  <g fill="#30152F">
+    <!-- temple gopuram -->
+    <path d="M110 560V500H124V470H134V440H144V412H152V392H176V412H184V440H194V470H204V500H218V560Z"/>
+    <path d="M152 392L164 368 176 392Z"/>
+    <!-- domed civic hall: wings, colonnade, drum, dome, finial -->
+    <path d="M250 560V470H290V448H330V470H520V448H560V470H600V560Z"/>
+    <path d="M360 470V430H490V470Z"/>
+    <path d="M378 430V400H472V430Z"/>
+    <path d="M384 400A41 44 0 0 1 466 400Z"/>
+    <rect x="423" y="340" width="4" height="18"/>
+    <circle cx="425" cy="338" r="4"/>
+    <path d="M296 448A14 16 0 0 1 324 448Z"/>
+    <path d="M526 448A14 16 0 0 1 554 448Z"/>
+    <!-- modern towers -->
+    <path d="M630 560V380H664V560Z"/>
+    <path d="M672 560V330H700V560Z"/>
+    <path d="M686 330V286L690 280 694 286V330Z"/>
+    <path d="M708 560V410H748V560Z"/>
+  </g>
+  <g fill="#F5EEE5" opacity="0.75">
+    <rect x="370" y="486" width="6" height="56"/><rect x="392" y="486" width="6" height="56"/>
+    <rect x="414" y="486" width="6" height="56"/><rect x="436" y="486" width="6" height="56"/>
+    <rect x="458" y="486" width="6" height="56"/><rect x="480" y="486" width="6" height="56"/>
+    <rect x="640" y="396" width="14" height="3"/><rect x="640" y="416" width="14" height="3"/>
+    <rect x="640" y="436" width="14" height="3"/><rect x="680" y="350" width="12" height="3"/>
+    <rect x="680" y="372" width="12" height="3"/><rect x="680" y="394" width="12" height="3"/>
+  </g>
+  <path d="M0 560H800V700H0Z" fill="#30152F"/>
+  <path d="M0 560C120 548 260 572 400 558S660 548 800 562" fill="none" stroke="#F47735" stroke-width="3" opacity="0.8"/>
+  <path d="M60 620C200 600 330 640 470 612S700 600 800 620" fill="none" stroke="#F5EEE5" stroke-width="1.5" stroke-dasharray="2 10" opacity="0.5"/>
+
+  <!-- botanical foreground -->
+  <g color="#5925B5" fill="#5925B5">
+    <use href="#frond" xlink:href="#frond" transform="translate(-20 250) rotate(-10) scale(1.3)"/>
+    <use href="#frond" xlink:href="#frond" transform="translate(0 330) rotate(8) scale(1.05)"/>
+  </g>
+  <g color="#30152F" fill="#30152F">
+    <use href="#frond" xlink:href="#frond" transform="translate(-30 380) rotate(-26) scale(0.9)"/>
+  </g>
+  <!-- broad leaves rising over the skyline (violet / orange read against the plum ground) -->
+  <g fill="#5925B5">
+    <use href="#leaf" xlink:href="#leaf" transform="translate(-10 700) rotate(-58) scale(2.3)"/>
+    <use href="#leaf" xlink:href="#leaf" transform="translate(810 700) scale(-2.1 2.1) rotate(-62)"/>
+  </g>
+  <g fill="url(#warm)">
+    <use href="#leaf" xlink:href="#leaf" transform="translate(30 705) rotate(-30) scale(1.9)"/>
+    <use href="#leaf" xlink:href="#leaf" transform="translate(770 705) scale(-1.7 1.7) rotate(-28)"/>
+  </g>
+  <g fill="#F5EEE5" opacity="0.9">
+    <use href="#leaf" xlink:href="#leaf" transform="translate(120 700) rotate(-78) scale(1.15)"/>
+  </g>
+  <g stroke="#F5EEE5" stroke-width="2" fill="none" opacity="0.5" stroke-linecap="round">
+    <path d="M-10 700L135 459"/><path d="M30 705L234 587"/><path d="M810 700L683 475"/><path d="M770 705L584 601"/>
+  </g>
+  <g stroke="#30152F" stroke-width="1.6" fill="none" opacity="0.6" stroke-linecap="round">
+    <path d="M120 700L148 560"/>
+  </g>
+  <!-- gulmohar branch with blossoms -->
+  <path d="M800 70C720 90 650 70 590 110S520 190 470 200" fill="none" stroke="#30152F" stroke-width="5" stroke-linecap="round"/>
+  <path d="M640 92C630 60 600 46 580 40M560 140C540 150 528 172 530 190" fill="none" stroke="#30152F" stroke-width="3" stroke-linecap="round"/>
+  <g fill="#F47735">
+    <use href="#flower" xlink:href="#flower" transform="translate(580 40) scale(0.9)"/>
+    <use href="#flower" xlink:href="#flower" transform="translate(470 200) rotate(20)"/>
+    <use href="#flower" xlink:href="#flower" transform="translate(530 192) scale(0.75) rotate(40)"/>
+    <use href="#flower" xlink:href="#flower" transform="translate(700 84) scale(1.05) rotate(10)"/>
+    <use href="#flower" xlink:href="#flower" transform="translate(760 64) scale(0.7) rotate(50)"/>
+  </g>
+  <g fill="#C9512A">
+    <use href="#flower" xlink:href="#flower" transform="translate(620 120) scale(0.6) rotate(25)"/>
+    <use href="#flower" xlink:href="#flower" transform="translate(505 165) scale(0.55)"/>
+  </g>
+
+</svg>

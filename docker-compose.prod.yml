@@ -1,0 +1,66 @@
+# Production overlay for a single VM (e.g. Oracle Cloud Always Free Ampere A1).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Requires a root .env with PUBLIC_HOST, POSTGRES_PASSWORD, JWT_SECRET,
+# TOMTOM_API_KEY (see .env.example). Caddy obtains and renews HTTPS
+# certificates automatically for PUBLIC_HOST (ports 80/443 must be open).
+
+x-prod-env: &prod-env
+  ENVIRONMENT: production
+  CORS_ORIGINS: https://${PUBLIC_HOST:?set PUBLIC_HOST}
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (>=32 chars)}
+  TOMTOM_API_KEY: ${TOMTOM_API_KEY:-}
+  LOG_JSON: "true"
+
+services:
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+
+  osrm-car:
+    ports: !reset []
+  osrm-foot:
+    ports: !reset []
+  osrm-bicycle:
+    ports: !reset []
+
+  backend:
+    env_file: !reset []
+    environment:
+      <<: *prod-env
+    ports: !reset []
+
+  collector:
+    env_file: !reset []
+    environment:
+      <<: *prod-env
+
+  frontend:
+    ports: !reset []
+
+  frontend4admin:
+    ports: !reset []
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+    volumes:
+      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_started
+      frontend4admin:
+        condition: service_started
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,88 @@
+rules_version = '2';
+
+// Bengaluru Pulse — personal data only (favourites, journal, preferences).
+// Trips, incidents, community data and roles live in PostgreSQL and are never read
+// from Firestore. Everything not matched below is denied.
+//
+//   users/{uid}/favorites/{favoriteId}
+//   users/{uid}/journal/{entryId}
+//   users/{uid}/preferences/app
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedInOwner(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true;
+    }
+
+    function isString(v, minLen, maxLen) {
+      return v is string && v.size() >= minLen && v.size() <= maxLen;
+    }
+
+    function optionalString(data, key, maxLen) {
+      return !(key in data) || data[key] == null || isString(data[key], 0, maxLen);
+    }
+
+    function createdNow(data) {
+      return data.createdAt == request.time;
+    }
+
+    function createdUnchanged() {
+      return request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function validFavorite(data) {
+      return data.keys().hasOnly(['label', 'detail', 'lat', 'lon', 'kind', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['label', 'lat', 'lon', 'createdAt', 'updatedAt'])
+        && isString(data.label, 1, 120)
+        && optionalString(data, 'detail', 200)
+        && data.lat is number && data.lat >= 12.4 && data.lat <= 13.6
+        && data.lon is number && data.lon >= 77.0 && data.lon <= 78.3
+        && (!('kind' in data) || data.kind in ['home', 'work', 'other'])
+        && data.updatedAt == request.time;
+    }
+
+    function validJournal(data) {
+      return data.keys().hasOnly(['title', 'body', 'mood', 'tripId', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['title', 'body', 'createdAt', 'updatedAt'])
+        && isString(data.title, 1, 120)
+        && isString(data.body, 0, 5000)
+        && (!('mood' in data) || data.mood in ['calm', 'okay', 'stressful'])
+        && (!('tripId' in data) || data.tripId == null || (data.tripId is int && data.tripId > 0))
+        && data.updatedAt == request.time;
+    }
+
+    function validPreferences(data) {
+      return data.keys().hasOnly(['vehicle', 'routePreference', 'avoid', 'departure', 'updatedAt'])
+        && (!('vehicle' in data) || data.vehicle in ['car', 'motorcycle', 'bicycle', 'walk'])
+        && (!('routePreference' in data) || data.routePreference in
+              ['fastest', 'shortest', 'least_traffic_now', 'least_traffic_predicted', 'balanced'])
+        && (!('avoid' in data) || data.avoid in ['', 'motorway', 'toll', 'ferry'])
+        && (!('departure' in data) || data.departure in ['now', 'later'])
+        && data.updatedAt == request.time;
+    }
+
+    match /users/{uid} {
+      // No profile document: identity comes from Firebase Auth, roles from PostgreSQL.
+      allow read, write: if false;
+
+      match /favorites/{favoriteId} {
+        allow read, delete: if signedInOwner(uid);
+        allow create: if signedInOwner(uid) && validFavorite(request.resource.data) && createdNow(request.resource.data);
+        allow update: if signedInOwner(uid) && validFavorite(request.resource.data) && createdUnchanged();
+      }
+
+      match /journal/{entryId} {
+        allow read, delete: if signedInOwner(uid);
+        allow create: if signedInOwner(uid) && validJournal(request.resource.data) && createdNow(request.resource.data);
+        allow update: if signedInOwner(uid) && validJournal(request.resource.data) && createdUnchanged();
+      }
+
+      match /preferences/{docId} {
+        allow read, delete: if signedInOwner(uid) && docId == 'app';
+        allow create, update: if signedInOwner(uid) && docId == 'app' && validPreferences(request.resource.data);
+      }
+    }
+  }
+}

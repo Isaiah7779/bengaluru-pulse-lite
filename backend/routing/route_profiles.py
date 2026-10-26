@@ -1,103 +1,92 @@
-﻿"""
-Vehicle routing profiles.
+"""Vehicle modes and the routing graph that genuinely serves each one.
 
-IMPORTANT:
-The current local OSRM server uses the standard OSRM car profile.
+Each OSRM server is built from one Lua profile (infrastructure/osrm/build_osrm.sh):
 
-Therefore motorcycle/bicycle/walking are currently accepted by the API
-interface but must NOT be falsely represented as dedicated OSRM profiles.
+    car      -> car.lua      (OSRM_URL)
+    walk     -> foot.lua     (OSRM_FOOT_URL)
+    bicycle  -> bicycle.lua  (OSRM_BICYCLE_URL)
 
-Until dedicated OSRM profiles are built, they fall back to driving.
+OSRM ignores the profile name in the request URL, so asking a car server for
+"foot" silently returns car routes. Modes are therefore mapped to *servers*, and
+a mode whose server is not configured is reported unavailable — never served
+by another graph.
+
+Motorcycle: OSRM ships no motorcycle profile. Motorcycles are routed on the car
+graph and this is disclosed in every response (`profile_status`).
 """
 
 from __future__ import annotations
 
-from typing import Dict
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+
+from core.settings import Settings
 
 
-# ============================================================================
-# SUPPORTED VEHICLES
-# ============================================================================
+@dataclass(frozen=True)
+class VehicleProfile:
+    vehicle: str
+    osrm_profile: str  # key used to look up the server URL
+    lua_profile: str
+    profile_status: str  # dedicated | car_graph_approximation
+    tomtom_travel_mode: Optional[str]  # None = traffic not applicable
+    excludable: tuple  # OSRM exclude classes supported by the Lua profile
+    notes: str
 
-SUPPORTED_VEHICLES = {
-    "car",
-    "motorcycle",
-    "bicycle",
-    "walk",
+
+PROFILES: Dict[str, VehicleProfile] = {
+    "car": VehicleProfile(
+        "car", "driving", "car.lua", "dedicated", "car", ("toll", "motorway", "ferry"),
+        "OSRM car profile on the full Bengaluru OSM graph.",
+    ),
+    "motorcycle": VehicleProfile(
+        "motorcycle", "driving", "car.lua", "car_graph_approximation", "motorcycle", ("toll", "motorway", "ferry"),
+        "No OSRM motorcycle profile exists; routed on the car graph. Two-wheeler-specific "
+        "restrictions (e.g. flyovers or expressways closed to two-wheelers) are not modelled.",
+    ),
+    "bicycle": VehicleProfile(
+        "bicycle", "cycling", "bicycle.lua", "dedicated", None, (),
+        "OSRM bicycle profile (uses cycle-permitted ways, cycling speeds).",
+    ),
+    "walk": VehicleProfile(
+        "walk", "foot", "foot.lua", "dedicated", None, (),
+        "OSRM foot profile (footways, pedestrian access, walking speed ~5 km/h).",
+    ),
 }
 
-
-# ============================================================================
-# OSRM PROFILE
-# ============================================================================
-
-def get_osrm_profile(
-    vehicle: str,
-) -> str:
-
-    """
-    Return the OSRM profile currently available.
-
-    At this stage the Bengaluru Pulse OSRM instance was built with:
-
-        /opt/car.lua
-
-    Therefore all routing currently uses the driving profile.
-    """
-
-    vehicle = (
-        str(vehicle)
-        .strip()
-        .lower()
-    )
-
-    if vehicle not in SUPPORTED_VEHICLES:
-
-        raise ValueError(
-            f"Unsupported vehicle: {vehicle}"
-        )
-
-    # ------------------------------------------------------------------------
-    # CURRENT IMPLEMENTATION
-    # ------------------------------------------------------------------------
-    #
-    # OSRM was built using car.lua.
-    #
-    # Do not pretend that this is bicycle/walking/motorcycle-specific routing.
-    #
-
-    return "driving"
+SUPPORTED_VEHICLES = set(PROFILES)
 
 
-# ============================================================================
-# VEHICLE METADATA
-# ============================================================================
+def get_profile(vehicle: str) -> VehicleProfile:
+    key = str(getattr(vehicle, "value", vehicle)).strip().lower()
+    if key not in PROFILES:
+        raise ValueError(f"Unsupported vehicle: {key}")
+    return PROFILES[key]
 
 
-def get_vehicle_metadata(
-    vehicle: str,
-) -> Dict[str, str]:
+def get_osrm_profile(vehicle: str) -> str:
+    return get_profile(vehicle).osrm_profile
 
-    vehicle = (
-        str(vehicle)
-        .strip()
-        .lower()
-    )
 
-    if vehicle not in SUPPORTED_VEHICLES:
+def server_url(settings: Settings, vehicle: str) -> Optional[str]:
+    return settings.osrm_url_for(get_profile(vehicle).osrm_profile)
 
-        raise ValueError(
-            f"Unsupported vehicle: {vehicle}"
-        )
 
-    return {
-        "vehicle": vehicle,
-        "osrm_profile": get_osrm_profile(
-            vehicle
-        ),
-        "profile_status": (
-            "dedicated"
-            if vehicle == "car"
-            else "fallback_to_car"
-        ),
+def get_vehicle_metadata(vehicle: str, settings: Optional[Settings] = None) -> Dict[str, object]:
+    profile = get_profile(vehicle)
+    data: Dict[str, object] = {
+        "vehicle": profile.vehicle,
+        "osrm_profile": profile.osrm_profile,
+        "lua_profile": profile.lua_profile,
+        "profile_status": profile.profile_status,
+        "traffic_supported": profile.tomtom_travel_mode is not None,
+        "avoid_options": list(profile.excludable),
+        "notes": profile.notes,
     }
+    if settings is not None:
+        data["available"] = bool(server_url(settings, vehicle))
+    return data
+
+
+def all_vehicle_metadata(settings: Settings) -> List[Dict[str, object]]:
+    return [get_vehicle_metadata(v, settings) for v in PROFILES]

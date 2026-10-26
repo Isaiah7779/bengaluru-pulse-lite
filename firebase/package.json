@@ -1,0 +1,15 @@
+{
+  "name": "bengaluru-pulse-firebase",
+  "private": true,
+  "description": "Firestore security rules, emulator configuration and rules tests (no runtime code).",
+  "scripts": {
+    "test:rules": "firebase emulators:exec --only firestore --project demo-bengaluru-pulse \"node --test tests/*.test.mjs\"",
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-bengaluru-pulse",
+    "deploy:rules": "firebase deploy --only firestore:rules"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.1.0",
+    "firebase-tools": "13.35.1"
+  }
+}

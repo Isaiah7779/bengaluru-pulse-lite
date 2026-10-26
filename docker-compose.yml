@@ -1,0 +1,180 @@
+# Bengaluru Pulse — full local / single-VM stack.
+#
+#   docker compose up -d --build
+#
+# OSRM graphs are pre-built once (infrastructure/osrm/build_osrm.sh) and mounted
+# read-only, so restarts never regenerate them. Secrets come from backend/.env
+# (gitignored) and the root .env (see .env.example); compose `environment`
+# overrides container-specific values such as service hostnames.
+
+x-backend-env: &backend-env
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+  DATABASE_URL: postgresql://pulse:${POSTGRES_PASSWORD:-pulse_dev_only}@postgres:5432/pulse
+  DB_AUTO_CREATE: "false"
+  OSRM_URL: http://osrm-car:5000
+  OSRM_FOOT_URL: http://osrm-foot:5000
+  OSRM_BICYCLE_URL: http://osrm-bicycle:5000
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001}
+  LOG_JSON: "true"
+  # Firebase Authentication (docs/AUTHENTICATION.md). Empty project ID = built-in sign-in only.
+  FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+  API_AUTH_REQUIRED: ${API_AUTH_REQUIRED:-true}
+  LEGACY_AUTH_ENABLED: ${LEGACY_AUTH_ENABLED:-true}
+  LEGACY_REGISTRATION_ENABLED: ${LEGACY_REGISTRATION_ENABLED:-true}
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: pulse
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulse_dev_only}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulse -d pulse"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  osrm-car:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: osrm-routed --algorithm mld --max-alternatives 3 /data/bengaluru.osrm
+    volumes:
+      - ${OSRM_CAR_DIR:-./data/osm}:/data:ro
+    ports:
+      - "127.0.0.1:5000:5000"
+    healthcheck: &osrm-health
+      # The OSRM image has no curl/wget; use bash /dev/tcp for a real nearest-road query.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/5000 && printf 'GET /nearest/v1/x/77.5946,12.9716 HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"code\":\"Ok\"' <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  osrm-foot:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: osrm-routed --algorithm mld --max-alternatives 3 /data/bengaluru.osrm
+    volumes:
+      - ${OSRM_FOOT_DIR:-./data/osrm-foot}:/data:ro
+    ports:
+      - "127.0.0.1:5001:5000"
+    healthcheck: *osrm-health
+    restart: unless-stopped
+
+  osrm-bicycle:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: osrm-routed --algorithm mld --max-alternatives 3 /data/bengaluru.osrm
+    volumes:
+      - ${OSRM_BICYCLE_DIR:-./data/osrm-bicycle}:/data:ro
+    ports:
+      - "127.0.0.1:5002:5000"
+    healthcheck: *osrm-health
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      <<: *backend-env
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Shared with the collector, which runs the daily retrain: the API must
+      # load the artifacts it writes, and both must survive rebuilds.
+      - models:/app/models
+      - evaluations:/app/evaluation/v2
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  collector:
+    # Same code as the backend, so it shares the backend's image tag: rebuilding either
+    # service updates both, and the collector can never lag behind the schema.
+    image: bengalurupulselite-backend
+    build:
+      context: ./backend
+    # The backend owns database migrations (it runs `alembic upgrade head` before serving
+    # and only reports healthy afterwards), so the collector just waits for it.
+    command: ["python", "-m", "traffic.collector"]
+    volumes:
+      - models:/app/models
+      - evaluations:/app/evaluation/v2
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      <<: *backend-env
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        REACT_APP_API_BASE_URL: /api
+        # Public Firebase web-app config (not secrets); empty = built-in sign-in.
+        REACT_APP_FIREBASE_API_KEY: ${FIREBASE_WEB_API_KEY:-}
+        REACT_APP_FIREBASE_AUTH_DOMAIN: ${FIREBASE_AUTH_DOMAIN:-}
+        REACT_APP_FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+        REACT_APP_FIREBASE_APP_ID: ${FIREBASE_WEB_APP_ID:-}
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend4admin:
+    build:
+      context: .
+      dockerfile: frontend4admin/Dockerfile
+      args:
+        REACT_APP_API_BASE_URL: /api
+        PUBLIC_URL: /admin
+        REACT_APP_FIREBASE_API_KEY: ${FIREBASE_WEB_API_KEY:-}
+        REACT_APP_FIREBASE_AUTH_DOMAIN: ${FIREBASE_AUTH_DOMAIN:-}
+        REACT_APP_FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+        REACT_APP_FIREBASE_APP_ID: ${FIREBASE_WEB_APP_ID:-}
+    ports:
+      - "127.0.0.1:${ADMIN_PORT:-8081}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Named Cloudflare Tunnel: a stable public HTTPS hostname (e.g. pulse.<your-domain>)
+  # with no open inbound ports. Opt-in: enable with COMPOSE_PROFILES=tunnel and set
+  # CLOUDFLARE_TUNNEL_TOKEN in the git-ignored .env (docs/DEPLOYMENT_GUIDE.md §8a).
+  # The public hostname and its origin (http://frontend:80) are set in the Cloudflare
+  # dashboard; the token only lets this connector serve that tunnel.
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.3
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    profiles: ["tunnel"]
+
+volumes:
+  pgdata:
+    name: bp_pgdata
+  models:
+  evaluations:

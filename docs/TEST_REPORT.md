@@ -1,0 +1,265 @@
+# Test report
+
+All results below were produced on 2026‑10‑22 on the development machine
+(Windows 11, 8 CPUs, 14.8 GB RAM, Docker Desktop 29.7, Python 3.12, Node 22.18)
+with the local Docker Compose stack running, unless stated otherwise. After `v2-build`
+was pushed, GitHub Actions CI ran once on commit `6b37482` and passed all four jobs
+(backend, frontend, mobile, docker):
+https://github.com/Isaiah7779/bengaluru-pulse-lite/actions/runs/39756763914.
+
+## R4 verification run (22 Oct 2026, 08:38–08:45 UTC)
+
+| Check | Command | Exact outcome |
+|---|---|---|
+| Backend suite | `cd backend && python -m pytest -q` | **115 passed**, 0 failed, 0 skipped, 2 warnings (95.8 s) |
+| Frontend tests | `CI=true npx react-scripts test --watchAll=false` | **7 passed** |
+| Frontend build | `CI=true npm run build` | compiled successfully (221.93 kB JS, 9.16 kB CSS, gzipped) |
+| Mobile typecheck | `npx tsc --noEmit` | 0 errors |
+| Running app via nginx | `GET http://localhost:8080/`, `/api/health/ready`, `POST /api/v1/routes` | 200; all readiness checks `ok`; route 200 in 1.4 s |
+| CORS (dev server) | preflight from `localhost:3000` / `localhost:8080` / foreign origin | allowed / allowed / rejected (400) |
+
+The 2 warnings: a deprecation warning from the test client library, and a short-key
+warning from a test that deliberately forges a JWT.
+
+### Reproducibility of the documented setup
+
+| Step (README) | How tested | Outcome |
+|---|---|---|
+| `infrastructure/osrm/prepare_graphs.sh` | fresh run into an empty scratch folder (fresh Geofabrik download) | exit 0 in 14 min; car/foot/bicycle graphs built (1.1 GB / 426 MB / 434 MB); reproduced car graph routes Airport → Whitefield 38.3 km (existing graph 38.03 km; newer OSM data) |
+| Gazetteer load (`docker compose run … geocoding.gazetteer`) | exact README command against a temporary database | 68,761 places loaded in 94 s |
+| Admin bootstrap (`auth.bootstrap`) | against the same temporary database (password via environment variable) | administrator created; temporary database dropped afterwards |
+| `docker compose up -d --build` from a fresh clone | **not tested** (would conflict with the running stack's ports); the same Dockerfiles/compose file built and ran in this workspace | — |
+
+### Known failures / not verified
+
+* No failing tests at the time of this run.
+* Not verified: permanent public deployment, the native mobile app on a device or
+  emulator, a full fresh-clone `docker compose up` on a second machine,
+  load/performance beyond single-user latency. CI on GitHub covers commit `6b37482`
+  only; later local commits have not been through GitHub CI.
+
+## Automated suites
+
+| Suite | Command | Result |
+|---|---|---|
+| Backend (unit + live integration) | `cd backend && python -m pytest -q` | **104 passed**, 0 failed, 0 skipped (219.8 s); re-run in the release audit: 104 passed, then **115 passed** after its additions (see RELEASE_READINESS.md) |
+| Frontend | `CI=true npx react-scripts test --watchAll=false` | **7 passed** |
+| Frontend production build | `CI=true npm run build` (lint warnings = errors) | compiled; 221.9 kB JS gz, 9.2 kB CSS |
+| Mobile typecheck | `npx tsc --noEmit` | 0 errors |
+| Mobile config | `npx expo-doctor` | 20/20 checks passed |
+| Mobile JS bundles | `npx expo export --platform android --platform ios` | Android 638 modules, iOS 640 modules (Hermes, 1.7 MB each) |
+| Mobile native build | `npx expo prebuild -p android && ./gradlew assembleDebug` | **app-debug.apk built** (150.6 MB, debug, all ABIs) |
+| Migrations | fresh PostGIS DB: upgrade → check → downgrade → upgrade | pass; `alembic check`: no drift |
+
+Backend tests by area (115 total): API surface 12, auth/RBAC 14, classification 8,
+community 9, routing engine 15, offline forecasting pipeline 6, prospective forecast
+logging 8, geometry/scoring 9, providers/ingestion/collector 15, live integration
+4 test functions = 8 cases (5 benchmarks, modes, avoid-toll, migrations).
+
+Forecasting tests use **synthetic test fixtures** to check the machinery (splits,
+no lookahead, baselines, registry, activation gate, prediction-vs-actual matching).
+They are not experimental evidence and no metric from them is reported as a result.
+
+## Live integration (real OSRM graphs, PostGIS)
+
+| Check | Result |
+|---|---|
+| 5 benchmark trips (Whitefield–Marathahalli, Whitefield–E‑City, Indiranagar–Yeshwanthpur, Airport–Whitefield, Koramangala–Hebbal) | all pass: distance bounds, steps, geometry, valid classes, no near-duplicates |
+| Modes use distinct graphs | walk 3–6.5 km/h, bicycle 8–25 km/h, car > 25 km/h (measured 5.0 / 14.1 / 51 km/h free-flow) |
+| `avoid=toll` | NICE Road present without, absent with avoid |
+| TomTom live timing | Whitefield→E‑City: 5 routes on `traffic_live`; shortcut 21.4 km/66 min vs reference 24.7 km/77 min |
+| Collector | each sweep: 26 flow stored, 6 weather stored, 300–350 incidents upserted |
+
+## End-to-end workflow (browser, http://localhost:8080, production nginx build)
+
+Open site → register (UI) → sign in → search "Koramangala" (suggestions) →
+"Hebbal" → Find routes → 5 routes compared on TomTom live traffic, recommended
+route drawn with incidents, explanation lists TomTom delay (9.1 min), typical
+time (58.2 min), geometry match 99 %, monitored points, weather →
+coordinates input ("12.9352, 77.6245") parsed → future departure (+1 h) →
+TomTom reconstruction mismatch correctly rejected, comparison fell back to
+free-flow with a warning → trip saved and listed in history → admin sign-in →
+system health (all ok, TomTom 131/2000 calls), models & metrics (research
+model listed as *candidate* with measured MAEs) → traffic page at 375 px width
+(no horizontal page scroll).
+
+## Security checks (live)
+
+| Check | Result |
+|---|---|
+| Signed-in user → `GET /v1/admin/users` | 403 `forbidden` |
+| Anonymous → admin API | 401 |
+| User → `PATCH /v1/admin/users/1 {"role":"user"}` | 403 |
+| User navigates to `#/admin` | UI falls back to Navigate |
+| Registration with `"role":"admin"` | created as `user` (unit test) |
+| Revoked / expired / forged JWT | 401 (unit tests) |
+| Login brute force | 429 after 5 failures (unit test) |
+| Other user's trip/favourite | 404 (unit test) |
+| TomTom key in logs with an invalid key | 0 occurrences |
+
+## Failure injection (live)
+
+| Fault | Observed behaviour |
+|---|---|
+| Car OSRM stopped | `/health/ready` 503 with `osrm_car: down`, foot/bicycle ok; car route 503 `routing_engine_unavailable` in 0.26 s; walking route 200 |
+| Car OSRM restarted | car routing 200 again after graph load |
+| TomTom rejecting the key (HTTP 401) | routes 200 on `free_flow` basis, per-route note, preference `least_traffic_now` → `fastest` with explanation, source marked unavailable |
+| Postgres + backend restarted | users, trips, 130 observations, 68,761 places unchanged |
+| Collector restarted | resumed schedule, no immediate re-poll |
+
+## Defects found by testing and fixed
+
+1. **TomTom API key leaked in error responses** (V1) — safe provider errors + log redaction.
+2. Dashboard endpoints served **random data** — removed (410) or backed by collected data.
+3. Walking/cycling silently used the **car graph** — dedicated graphs, no fallback.
+4. 1 s per HTTP client from CA-bundle loading (routes took 14–21 s) — shared SSL context (2–3 s).
+5. `localhost` → IPv6 made psycopg hang on Windows — use `127.0.0.1` + connect timeout.
+6. Duplicate check missed same-session rows (`autoflush=False`) — explicit flush.
+7. Naive vs aware datetimes from SQLite — normalised to UTC.
+8. Incidents on crossing side-streets attributed to routes — overlap-based matching.
+9. Login rejected reserved-domain e-mails (bootstrap admin locked out) — login accepts any stored address.
+10. A dead OSRM server starved uvloop's DNS threads so healthy servers looked down — circuit breaker + larger thread pool.
+11. cp1252-encoded source written by a patch script — repaired; UTF-8 enforced.
+12. Gazetteer bulk load 8 min — PostgreSQL COPY (5 s).
+13. TomTom HTTP 401 (invalid key) did not stop a collector sweep (26 wasted calls per sweep) — now stops and backs off (release audit).
+14. Collector could not write models/reports (read-only dirs) and the API could not see collector-trained models (unshared volume) — fixed and verified live (release audit).
+15. Local web dev server (`npm start`, port 3000) blocked by CORS against the Docker backend — compose default now allows it; verified by preflight (R4 audit).
+
+## Not verified
+
+* GitHub Actions runs (not pushed); public deployment (no hosting account).
+* Mobile app on a physical device or emulator (no AVD configured; APK built only).
+* Load/performance testing beyond single-user latency.
+
+## External access and mobile configuration (22 Oct 2026, 09:40–10:00 UTC)
+
+| Check | Exact outcome |
+|---|---|
+| Docker services | 7 up; backend, OSRM ×3, Postgres healthy; collector 0 restarts |
+| Local web/API | `localhost:8080` 200; `/api/health/ready` all `ok` |
+| LAN binding | `http://192.168.1.7:8080` and `/api/health` → 200 from the laptop; 8000, 5433, 5000 on the LAN address refused (bound to 127.0.0.1) |
+| Cloudflare quick tunnel | `cloudflared` 2026.10.3 (already installed, not on PATH) connected via `bom09` |
+| Through the public HTTPS URL | page 200; readiness all `ok`; search "phoenix market" → Phoenix Market City; car route Koramangala → Hebbal on `traffic_live`, 3 routes; `GET /api/v1/admin/users` without token → 401 |
+| Frontend → backend via tunnel (browser) | Traffic page issued 4 API calls, all 200; rendered 26/26 points fresh, 338 incidents |
+| Mobile TypeScript | `npx tsc --noEmit` → 0 errors |
+| Expo diagnostics | `npx expo-doctor` → 20/20 checks passed |
+| Mobile iOS bundle | `npx expo export --platform ios` with the tunnel URL → bundled 640 modules; URL present once; 0 of 5 backend secrets present |
+| Expo dev server (`--lan`) | manifest for iOS: `exposdk:58.0.0`, `hostUri 192.168.1.7:8081` |
+| iPhone Safari → public HTTPS tunnel URL | **PASS — verified manually by the project owner** (page opened) |
+| iPhone Safari → LAN URL `http://192.168.1.7:8080` (same Wi-Fi) | **PASS — verified manually by the project owner** (page opened) |
+| iPhone Safari → route planning | **PASS — verified manually by the project owner** (a route was displayed) |
+| Native Expo app on the physical iPhone | **not tested** — App Store Expo Go does not yet support SDK 58; a development build needs Apple signing (owner approval) |
+
+Mobile-web success on the iPhone shows the deployed web app works on the phone; it does
+**not** show that the native Expo app installs or launches on iOS.
+
+
+## Packaging verification (22 Oct 2026, 10:00–10:20 UTC)
+
+Archive built with `git archive` from the committed tree (tracked files only), excluding
+`backend/traffic.db` and `backend/traffic_model.pkl`. Final file:
+`dist/bengaluru-pulse-v2-r4-source-v3.zip` (contains this section). The checks below were
+**actually run** on `…-v2.zip` (commit `f143dd8`); `…-v3.zip` differs only in documentation
+files, verified by comparing every non-`docs/` member byte for byte, and was re-scanned.
+
+| Check (run on the archive / extracted copy) | Outcome |
+|---|---|
+| ZIP integrity (CRC of every member) | OK |
+| Members | 203 files, 5.6 MB uncompressed |
+| Forbidden paths (`.env`, `node_modules`, venvs, caches, build output, `mobile/android`, APK, databases, `data/`, OSRM graphs, keys/certificates) | none |
+| Real secret values from `backend/.env` (5 checked, not printed) | 0 members contain any |
+| Generic credential patterns (`api_key=`, `password=`, `token=` with long values) | none |
+| Required files (compose, Dockerfiles, migrations, scripts, templates, mobile config, submission docs) | 33/33 present |
+| Mobile API configuration (`EXPO_PUBLIC_API_BASE_URL`, dev-server LAN host, `expo-constants`) | present |
+| Extracted: `docker compose config` | valid; 7 services |
+| Extracted: production overlay config without production variables | refuses as designed (`PUBLIC_HOST` required) |
+| Extracted: `prepare_graphs.sh` | LF line endings; `bash -n` ok |
+| Extracted: `python -m compileall backend` | ok |
+| Extracted: backend `pytest` (no `.env` present; integration tests used the running local OSRM/PostGIS) | **115 passed** |
+| Extracted: mobile `npm ci` + `npx tsc --noEmit` | 464 packages installed; 0 errors |
+| Extracted: mobile `npx expo-doctor` | 20/20 passed |
+| Extracted: frontend `npm ci` + tests | 1,358 packages installed; **7 passed** |
+
+Not run from the extracted copy: `docker compose up --build` (would collide with the
+running stack's ports and needs the ≈ 1.4 GB road graphs, which are not in the ZIP) and the
+graph build itself (reproduced separately from scratch earlier the same day: exit 0, 14 min).
+
+
+## Cross-platform verification (22 Oct 2026, 15:45–16:40 UTC)
+
+Browser checks used the in-app Chromium browser with viewport emulation (touch emulation at
+phone width). No physical Android device, iPad, Mac or Linux desktop was available.
+
+| Check | Size / platform | Outcome |
+|---|---|---|
+| Route planning in the UI | 375×812 (phone, touch) | 2 routes on TomTom live traffic, cards and map shown |
+| Horizontal overflow | 375, 768, 1024, 1280 px wide | none (`scrollWidth` = viewport) |
+| Form text size (iOS focus-zoom) | phone | 14 px → **16 px** after fix |
+| Touch targets < 36 px | phone, touch | swap 33×28, steps link 28 px, header links 32 px → **none** after fix |
+| Header height | phone | 85 px (wrapped) → 61 px single line |
+| Layout | 768×1024 tablet | stacked map + panel; Traffic table fits (713 px) |
+| Layout | 1024×768 / 1280×800 | sidebar 420 px + map 604 / 860 px; desktop sizing unchanged |
+| Traffic and weather loading | tablet | 26/26 points fresh, incidents, weather areas shown |
+| API unavailable (network calls forced to fail in the tab) | tablet | map picks fall back to coordinates; planning shows "Cannot reach the Bengaluru Pulse server…"; form stays usable |
+| Production bundle API base | build | `/api`; no `localhost`/`127.0.0.1` URLs |
+| Frontend tests / build | — | **7 passed**; compiled successfully |
+| Mobile TypeScript | — | 0 errors |
+| Expo diagnostics | — | `expo-doctor` 20/20 |
+| iOS configuration + bundle | — | SDK 58.0.0, bundle id `org.bengalurupulse.app`, iPad supported, location text set; iOS bundle 640 modules |
+| Android release APK | — | `assembleRelease` exit 0; 34.6 MB; signature verifies; minSdk 24; arm64-v8a + armeabi-v7a; JS embedded; 0 secrets; no server URL baked in |
+| Android install / launch | — | **not tested** (no device or emulator) |
+| iOS native install / launch | — | **not tested** (needs paid Apple Developer account or Mac/Xcode) |
+| Firefox, Safari desktop, macOS, Linux | — | **not tested** (not available) |
+
+User-verified earlier: iPhone Safari via the tunnel URL and the LAN URL, with route planning.
+
+## Packaging verification (v4, 22 Oct 2026, 16:45–17:05 UTC)
+
+Final archive: `dist/bengaluru-pulse-v2-r4-source-v4.zip` (contains this section). Checks were
+**run** on a candidate archive built from commit `8bce7a0`; the final archive differs only in
+documentation files (verified by comparing every non-`docs/` member byte for byte) and was re-scanned.
+
+| Check | Outcome |
+|---|---|
+| Integrity (CRC of every member) | OK |
+| Members | 204 files, 5.6 MB uncompressed |
+| Forbidden paths (`.env`, `node_modules`, venvs, caches, build output, `mobile/android`, APKs, databases, `data/`, OSRM graphs, keys) | none |
+| Real secret values (5, not printed) / generic credential patterns | none / none |
+| Required files (incl. `mobile/eas.json`, compose, migrations, scripts, templates, docs) | present |
+| Extracted: `docker compose config` | valid, 7 services; production overlay refuses without `PUBLIC_HOST` (by design) |
+| Extracted: `prepare_graphs.sh` | LF endings, `bash -n` ok |
+| Extracted: backend `pytest` (no `.env`; integration tests used the running local OSRM/PostGIS) | **115 passed** |
+| Extracted: mobile `npm ci`, `tsc --noEmit`, `expo-doctor` | 464 packages; 0 errors; 20/20 |
+| Extracted: frontend `npm ci`, tests, production build | 1,358 packages; **7 passed**; compiled, API base `/api` |
+
+Not run from the archive: `docker compose up --build` (port collision with the running stack;
+road graphs not included) and native mobile builds (the Android APK was built from the
+working tree, which has identical mobile source).
+
+## Firebase authentication and personal data (22 Oct 2026, 18:00–19:30 IST)
+
+Run against code at commits `2f9d7a9`…`715d84e`. No real Firebase project existed yet, so
+end-to-end checks used the **Firebase Emulator Suite** (Auth + Firestore,
+firebase-tools 13.35.1, JDK 17). They ran against a separate backend on port 8001 and a
+scratch database (`pulse_e2e`, dropped afterwards). The deployed stack was not changed.
+
+| Check | Result |
+|---|---|
+| Backend unit tests (`pytest -q`) | **134 passed** (115 existing + 19 new in `test_firebase_auth.py`): real RS256 tokens through the Firebase Admin SDK; forged-key, wrong-audience, wrong-issuer, empty-subject, expired and unsigned tokens rejected; unverified e-mail → 403; token "admin" claims ignored; no automatic e-mail linking; explicit link needs the old password and keeps ID/role/trips; per-user isolation; recent-sign-in deletion |
+| Migration 0003 on a scratch PostGIS database | upgrade → downgrade → upgrade clean |
+| Firestore rules on the emulator (`npm run test:rules`) | **7 passed** (ownership, cross-user denial, anonymous/unverified denial, no role/profile docs, field validation, immutable `createdAt`, preferences doc) |
+| Frontend tests | **15 passed** (8 new: sign-in gate, destination kept, Firebase verification screen, ID token on requests, linking, wrong password keeps session, token refresh) |
+| Frontend production build | compiled, no warnings; Firebase SDK in lazy chunks (main +8 kB) |
+| Mobile `tsc --noEmit` / `expo-doctor` / Android bundle | 0 errors / 20 of 20 / exported (React Native auth build resolved) |
+| API end to end via Auth emulator | **12/12**: anonymous 401, `/health` public, unverified 403, verification via emulator link, user role, admin API 403, route planning (3 routes, free-flow; TomTom disabled to avoid quota), trip saved, user B cannot list or open user A's trip, foreign-project token 401 |
+| Web UI end to end (browser) | registration → verification screen ("Not verified yet" before the link) → verified → lands on requested `#/traffic`; session survives reload; Firestore favourite, journal entry and preferences saved; planner applied preferences and showed the saved-place chip; sign-out; existing-account e-mail → link screen; wrong old password shows an error (bug found and fixed: it previously signed the user out); correct password → admin role kept, lands on `#/admin` |
+| Google provider | emulator `signInWithIdp`: verified Google e-mail → normal user; unverified → 403. The in-app test browser cannot host OAuth popups, so the web popup and native Android Google sign-in are **not yet verified** (need a real project) |
+| Backend Docker image | builds with firebase-admin; inside the container the SDK fetched Google's real signing certificates and rejected a forged token |
+| Android release signing | new upload key (PKCS12, RSA 4096); verification `assembleRelease` succeeded; `apksigner` shows signer `CN=Bengaluru Pulse`, SHA-1 `41:1B:2F:…:B7:3A`, SHA-256 `9C:BF:65:…:F8:A1`; package `org.bengalurupulse.app`. This was a check only: no Firebase config, not copied to `dist/` |
+
+**Not verified yet** (needs the real Firebase project):
+
+* real verification and reset e-mails;
+* Google sign-in on the web and on Android;
+* rules deployed to production Firestore;
+* the deployed stack running with `FIREBASE_PROJECT_ID`.

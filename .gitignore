@@ -7,8 +7,10 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-v2/
 venv/
 env/
+tools/
 
 # Node
 node_modules/
@@ -29,3 +31,27 @@ data/osm/
 
 # Temporary local routing files
 /routing/
+
+# Local data: OSM extracts, OSRM graphs, build logs, env backups
+data/
+# ...but not application source folders named "data"
+!frontend/src/data/
+backend/runtime/
+backend/models/
+
+# Submission packages
+dist/
+
+# Firebase: emulator logs/exports, service-account keys, native app configs
+firebase/*-debug.log
+firebase/emulator-data/
+*-firebase-adminsdk-*.json
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# Android release signing material (never commit)
+*.keystore
+!mobile/android/app/debug.keystore
+*.jks
+keystore.properties
