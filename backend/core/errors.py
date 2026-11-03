@@ -7,6 +7,7 @@ logged (redacted) but never returned, so provider URLs and keys cannot leak.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 
 from fastapi import FastAPI, Request
@@ -15,6 +16,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger("pulse.errors")
+
+_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
 
 class AppError(Exception):
@@ -59,7 +62,9 @@ def _body(code: str, message: str, request_id: str, **extra) -> dict:
 def install_error_handlers(app: FastAPI) -> None:
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
-        request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
+        # A client-supplied ID is echoed back, so accept only short, plain tokens.
+        supplied = request.headers.get("x-request-id") or ""
+        request_id = supplied if _REQUEST_ID.fullmatch(supplied) else uuid.uuid4().hex[:16]
         request.state.request_id = request_id
         response = await call_next(request)
         response.headers["x-request-id"] = request_id
