@@ -14,9 +14,14 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    rootDir: backend
+    # No rootDir: Render's docs disagree on whether dockerfilePath/dockerContext are
+    # relative to rootDir or the repo root; without rootDir both readings agree.
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
+    # Redeploy only when backend files change (what rootDir used to provide).
+    buildFilter:
+      paths:
+        - backend/**
     healthCheckPath: /health
     autoDeploy: true
     envVars:
