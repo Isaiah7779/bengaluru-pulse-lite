@@ -48,6 +48,9 @@ class Settings(BaseSettings):
         "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:8080",
         alias="CORS_ORIGINS",
     )
+    # Optional regex for origins that cannot be listed in advance, e.g. Vercel preview
+    # deployments: ^https://bengaluru-pulse(-[a-z0-9-]+)?\.vercel\.app$
+    cors_origin_regex: Optional[str] = None
 
     # -- database ------------------------------------------------------------
     database_url: str = f"sqlite:///{(BASE_DIR / 'runtime' / 'pulse.db').as_posix()}"
@@ -62,6 +65,13 @@ class Settings(BaseSettings):
     osrm_foot_url: Optional[str] = None
     osrm_bicycle_url: Optional[str] = None
     osrm_timeout_seconds: float = 10.0
+    # False for public OSRM servers (e.g. routing.openstreetmap.de) that reject
+    # `exclude`; avoid options are then not offered instead of failing at request time.
+    osrm_exclude_supported: bool = True
+    # Corridor via-routes requested per route (beyond OSRM's own alternatives) and how
+    # many OSRM calls run at once. Lower both for rate-limited public servers.
+    osrm_corridor_max: int = 10
+    osrm_max_concurrency: int = 5
     max_route_candidates: int = 5
 
     # -- providers -------------------------------------------------------------
@@ -119,6 +129,11 @@ class Settings(BaseSettings):
     def _empty_is_none(cls, value):
         return None if isinstance(value, str) and not value.strip() else value
 
+    @field_validator("cors_origin_regex", mode="before")
+    @classmethod
+    def _empty_regex_is_none(cls, value):
+        return None if isinstance(value, str) and not value.strip() else value
+
     @field_validator("tomtom_api_key", "jwt_secret", mode="before")
     @classmethod
     def _empty_secret_is_none(cls, value):
@@ -133,6 +148,8 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET (>=32 chars) is required in production")
             if "*" in self.cors_origins:
                 raise ValueError("Wildcard CORS origin is not allowed in production")
+            if self.cors_origin_regex and self.cors_origin_regex.strip() in {".*", "^.*$", "https://.*"}:
+                raise ValueError("Match-all CORS_ORIGIN_REGEX is not allowed in production")
             if os.environ.get("FIREBASE_AUTH_EMULATOR_HOST"):
                 raise ValueError("FIREBASE_AUTH_EMULATOR_HOST must not be set in production")
         return self

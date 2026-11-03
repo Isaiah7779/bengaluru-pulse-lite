@@ -1,0 +1,78 @@
+# Render Blueprint: Bengaluru Pulse API + PostgreSQL/PostGIS on the free plan.
+#
+#   Render dashboard -> New -> Blueprint -> pick this repository.
+#
+# Free-plan limits (check render.com/pricing): the web service sleeps after
+# ~15 min idle (first request then takes ~1 min), 512 MB RAM; the free database
+# expires 30 days after creation unless upgraded. Background workers and cron
+# jobs are not free, so the traffic collector runs as a scheduled GitHub Action
+# instead (.github/workflows/collector.yml). See docs/DEPLOY_FREE_TIER.md.
+
+services:
+  - type: web
+    name: bengaluru-pulse-api
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: backend
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bengaluru-pulse-db
+          property: connectionString
+      - key: DB_AUTO_CREATE
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: LOG_JSON
+        value: "true"
+      # Comma-separated web origins, e.g. https://bengaluru-pulse.vercel.app,https://bengaluru-pulse-admin.vercel.app
+      - key: CORS_ORIGINS
+        sync: false
+      # Optional: regex for Vercel preview URLs, e.g. ^https://bengaluru-pulse(-[a-z0-9-]+)?\.vercel\.app$
+      - key: CORS_ORIGIN_REGEX
+        sync: false
+      # No OSRM server fits the free plan, so routing uses the public FOSSGIS OSRM
+      # servers (fair use, no key). They reject OSRM `exclude`, so avoid options are off.
+      # Point these at your own OSRM servers to restore avoid options and remove the dependency.
+      - key: OSRM_URL
+        value: https://routing.openstreetmap.de/routed-car
+      - key: OSRM_FOOT_URL
+        value: https://routing.openstreetmap.de/routed-foot
+      - key: OSRM_BICYCLE_URL
+        value: https://routing.openstreetmap.de/routed-bike
+      - key: OSRM_EXCLUDE_SUPPORTED
+        value: "false"
+      - key: OSRM_TIMEOUT_SECONDS
+        value: "15"
+      # Keep the load on the shared servers low: 1 + 4 OSRM calls per route, one at a time.
+      - key: OSRM_CORRIDOR_MAX
+        value: "4"
+      - key: OSRM_MAX_CONCURRENCY
+        value: "1"
+      # Optional free-tier TomTom key (developer.tomtom.com). Empty = no live traffic.
+      - key: TOMTOM_API_KEY
+        sync: false
+      # Optional Firebase project ID (free Spark plan). Empty = built-in sign-in only.
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: API_AUTH_REQUIRED
+        value: "true"
+      - key: LEGACY_AUTH_ENABLED
+        value: "true"
+      - key: LEGACY_REGISTRATION_ENABLED
+        value: "true"
+
+databases:
+  - name: bengaluru-pulse-db
+    plan: free
+    region: singapore
+    databaseName: pulse
+    user: pulse
+    postgresMajorVersion: "16"

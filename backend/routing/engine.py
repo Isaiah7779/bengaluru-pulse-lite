@@ -42,7 +42,7 @@ from routing import scoring
 from routing.classification import classify
 from routing.geometry import PointIndex, backtrack_length_m, haversine_m, resample, route_similarity
 from routing.osrm_client import OSRMClient, OSRMError, OSRMNoRoute, extract_route_steps
-from routing.route_profiles import VehicleProfile, get_profile, get_vehicle_metadata, server_url
+from routing.route_profiles import VehicleProfile, avoid_options, get_profile, get_vehicle_metadata, server_url
 from routing.schemas import (
     DataSourceStatus,
     RouteIncident,
@@ -231,11 +231,12 @@ class RoutingEngine:
             raise AppError("Departure time must be within 7 days", code="invalid_departure")
         future = depart_at - now > FUTURE_THRESHOLD
         avoid = [a.value for a in req.avoid]
-        unsupported = [a for a in avoid if a not in profile.excludable]
+        excludable = avoid_options(profile, self.settings)
+        unsupported = [a for a in avoid if a not in excludable]
         if unsupported:
             raise AppError(
                 f"Avoid option(s) {unsupported} not supported for {profile.vehicle} "
-                f"(supported: {list(profile.excludable) or 'none'})",
+                f"by the configured routing server (supported: {list(excludable) or 'none'})",
                 code="unsupported_avoid",
             )
         if haversine_m((req.origin.lon, req.origin.lat), (req.destination.lon, req.destination.lat)) < 30:
@@ -282,8 +283,8 @@ class RoutingEngine:
         reference = candidates[0]
 
         # 3. corridor candidates in parallel ----------------------------------
-        corridors = corridor_waypoints(o[0], o[1], d[0], d[1])
-        semaphore = asyncio.Semaphore(5)
+        corridors = corridor_waypoints(o[0], o[1], d[0], d[1])[: max(0, self.settings.osrm_corridor_max)]
+        semaphore = asyncio.Semaphore(max(1, self.settings.osrm_max_concurrency))
 
         async def fetch(via):
             async with semaphore:

@@ -11,6 +11,9 @@ from functools import lru_cache
 
 import httpx
 
+# Public OSM services (OSRM demo servers, Photon) ask clients to identify themselves.
+USER_AGENT = "BengaluruPulse/3.0 (academic project)"
+
 
 @lru_cache(maxsize=1)
 def ssl_context() -> ssl.SSLContext:
@@ -18,4 +21,4 @@ def ssl_context() -> ssl.SSLContext:
 
 
 def async_client(timeout: float | httpx.Timeout) -> httpx.AsyncClient:
-    return httpx.AsyncClient(timeout=timeout, verify=ssl_context())
+    return httpx.AsyncClient(timeout=timeout, verify=ssl_context(), headers={"User-Agent": USER_AGENT})
