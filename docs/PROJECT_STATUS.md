@@ -2,6 +2,13 @@
 
 _Last updated: 2026‑10‑22 — living resume file._
 
+> **Update 2026-11-03.** `v2-build` is pushed to GitHub and CI passed on `fac06c3`.
+> Deployment target changed to free tiers (Render + Vercel, [DEPLOY_FREE_TIER.md](DEPLOY_FREE_TIER.md));
+> no public deployment has been verified. All app endpoints and pages require sign-in
+> ([SECURITY.md](SECURITY.md#authorization-enforced-in-the-backend)). V3 (RAG) design is
+> on branch `v3-rag` ([docs/v3/](v3/ADR-0001-rag-mvp.md)). The sections below are the
+> 22 Oct record.
+
 Branch `v2-build` (local; not pushed). Commits on top of `main`: baseline snapshot
 `2e42577` → backend `f7ff3b6` → ML `11c14d8` → web `6b7563d` → mobile/CI/deploy
 `61ad452` → docs `f1db377` → final reports.

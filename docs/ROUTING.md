@@ -31,6 +31,9 @@ Measured speeds, Indiranagar → Yeshwanthpur (live OSRM): car 14.7 km / 17.2 mi
    7 / 14 / 24 / 34 % of the trip length (clamped 300 m – 7 km) on both sides
    (two via-points at 30 % and 70 %), plus two single mid-points at 18 %.
    10 requests, 5 concurrently. Trips under 400 m skip corridors.
+   These are the defaults (`OSRM_CORRIDOR_MAX=10`, `OSRM_MAX_CONCURRENCY=5`); the
+   free-tier configuration (`render.yaml`) uses 4 corridor requests, one at a time, to
+   stay within the public OSRM servers' limits, so it finds fewer alternatives.
 3. Filters: distance ≤ 1.5 × reference + 1 km, duration ≤ 1.5 × reference + 3 min;
    corridor routes retracing ≥ 120 m of road already used (U-turn spurs at a
    snapped via-point) are dropped.
@@ -70,7 +73,9 @@ incidents add 0.5 per major/closure and 0.1 per other incident on the route (cap
 These weights are a documented product choice, not a learned model.
 
 Avoid options: `toll`, `motorway`, `ferry` (car and motorcycle only, one at a time;
-OSRM's car profile rejects combinations). Verified: Electronic City → Kengeri uses
+OSRM's car profile rejects combinations). They are offered only when
+`OSRM_EXCLUDE_SUPPORTED=true` (default); the public OSRM servers used by the free-tier
+configuration reject `exclude`, so there the options are not offered. Verified: Electronic City → Kengeri uses
 NICE Road (27.47 km, 22.7 min); with `avoid=toll` it uses the service road
 (26.42 km, 31.6 min).
 

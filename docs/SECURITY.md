@@ -2,6 +2,11 @@
 
 ## Authentication
 
+* Two sign-in paths ([AUTHENTICATION.md](AUTHENTICATION.md)): **Firebase ID tokens**
+  (when `FIREBASE_PROJECT_ID` is set; verified e-mail required, otherwise
+  `403 email_not_verified`) and **built-in accounts** (HS256 JWTs from `/v1/auth/login`,
+  accepted while `LEGACY_AUTH_ENABLED=true`). The points below on passwords, sessions and
+  login limits describe the built-in path; Firebase handles its own passwords.
 * Passwords: bcrypt (cost 12); policy ≥ 10 chars, upper + lower case, digit, ≤ 72 bytes.
   Admin bootstrap requires ≥ 14 chars.
 * Sessions: HS256 JWT bearer tokens (60 min) with `jti`, `iat`, `exp`, issuer.
@@ -17,9 +22,18 @@
 The role is **read from the database on every request**, never from token claims,
 so demotion or deactivation takes effect immediately (tested).
 
+Application endpoints are guarded by `app_access` (`backend/main.py`). With
+`API_AUTH_REQUIRED=true`, the default in `core/settings.py`, `docker-compose.yml` and
+`render.yaml`, anonymous requests get `401`; only `/health`, `/health/ready` and the
+sign-in endpoints under `/v1/auth/*` are public (tested:
+`tests/test_firebase_auth.py::test_health_is_public_but_app_endpoints_need_sign_in`).
+The web and mobile apps show only the sign-in screen until a user is signed in.
+`API_AUTH_REQUIRED=false` restores anonymous access to the first row below; it is meant
+for local development and is what most unit tests use (`tests/conftest.py`).
+
 | Capability | Anonymous | User | Admin |
 |---|---|---|---|
-| Plan routes, search places, view traffic/incidents/weather, view verified shortcuts | ✓ | ✓ | ✓ |
+| Plan routes, search places, view traffic/incidents/weather, view verified shortcuts | – (only with `API_AUTH_REQUIRED=false`) | ✓ | ✓ |
 | Save trips, favourites, own trip history | – | own only | own only |
 | Submit community routes / incident reports | – | ✓ (rate-limited) | ✓ |
 | Moderate submissions and incident reports | – | – | ✓ |
@@ -67,8 +81,9 @@ so demotion or deactivation takes effect immediately (tested).
 
 ## Known gaps (not implemented)
 
-* No e-mail verification or password-reset flow (needs an e-mail provider).
-* No refresh tokens; users sign in again after 60 minutes.
+* Built-in accounts have no e-mail verification or password-reset flow (needs an e-mail
+  provider). With Firebase configured, both are handled by Firebase Authentication.
+* No refresh tokens for built-in accounts; users sign in again after 60 minutes.
 * The login rate limiter is in-process; behind several API replicas it should move to the database/Redis.
 * No CSP header yet on the web app (Leaflet tiles and inline styles need a tuned policy).
 * Dependency vulnerability scanning is not part of CI yet (`npm audit`/`pip-audit` recommended).

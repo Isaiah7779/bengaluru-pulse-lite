@@ -20,7 +20,7 @@ Synthetic test fixtures are never used as evidence here.
 | Auth / roles / security | complete | yes [test, live] |
 | Web app | complete | yes — browser walkthrough [live] |
 | Mobile app | builds (iOS bundle; Android release APK, signature verified) | **native app not run on a device**; the web app was verified on the owner's iPhone (Safari) and in emulated phone/tablet/desktop viewports |
-| Public deployment | configuration prepared | **not deployed** |
+| Public deployment | free-tier configuration in the repository (Render API + database, Vercel web apps; [DEPLOY_FREE_TIER.md](DEPLOY_FREE_TIER.md)) | **no deployment verified**; no public URL recorded (status as of 3 Nov 2026) |
 
 ## 2. Routing
 
@@ -127,7 +127,7 @@ on real data, nothing more. Current figures: `docker compose exec collector pyth
    representative.
 7. **Motorcycle** uses the car graph; two-wheeler restrictions are not modelled.
 8. **Native mobile app** not launched on a device (App Store Expo Go lacks SDK 58; iOS builds need Apple signing). The web app works in iPhone Safari (verified by the owner).
-9. **No permanent public deployment.** External access is a temporary Cloudflare quick tunnel: its URL changes on every start, and it works only while the laptop, Docker services, internet connection and tunnel process keep running. CI passed on GitHub (22 Oct 2026).
+9. **No verified public deployment.** On 22 Oct 2026 external access was a temporary Cloudflare quick tunnel: its URL changes on every start, and it works only while the laptop, Docker services, internet connection and tunnel process keep running. Since then a free-tier configuration has been added (`render.yaml`, `frontend/vercel.json`, `frontend4admin/vercel.json`, [DEPLOY_FREE_TIER.md](DEPLOY_FREE_TIER.md)); it needs owner-created Render and Vercel accounts, and no deployment from it has been verified as of 3 Nov 2026. That setup would use the shared public OSRM servers, so it would offer fewer route alternatives than the local stack and no avoid options. CI passed on GitHub (22 Oct 2026; latest green run on `fac06c3`, 3 Nov 2026).
 10. **Terms:** TomTom storage terms unconfirmed — collected observations must not be published.
 
 ## 6. Next steps

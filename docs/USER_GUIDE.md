@@ -1,10 +1,15 @@
 # User guide
 
 Open the web app at **http://localhost:8080** (after `docker compose up -d`).
-The top bar has **Navigate**, **Traffic**, and, once signed in, **My account**
-and (administrators only) **Admin**.
+Every page starts behind the sign-in screen: you need an account to plan routes
+or view traffic (see [§4](#4-create-an-account-and-sign-in)). Once you are signed in,
+the side bar has **Home**, **Navigate**, **Traffic**, **Insights**, **Journal**,
+**About**, **My account** and, for administrators only, **Admin**.
 
-## 1. Plan a route (no account needed)
+## 1. Plan a route (sign-in required)
+
+Sign in first (§4). The API refuses route requests without a signed-in account
+(`API_AUTH_REQUIRED=true`, the default in `docker-compose.yml` and `render.yaml`).
 
 1. **From**: type a place (e.g. `Koramangala`, `Phoenix Market City`,
    `Indiranagar Metro`) and pick a suggestion with the mouse or ↑/↓ + Enter.
@@ -16,6 +21,9 @@ and (administrators only) **Admin**.
    routing server is not running. Motorcycle shows a note: it uses the car road graph.
 4. **Preference**: Fastest, Shortest, Least traffic now, Least predicted traffic, or Balanced.
 5. **Avoid** (car/motorcycle): toll roads, expressways or ferries (one at a time).
+   Shown only when the routing servers support it; the free-tier deployment uses
+   public OSRM servers that do not, so the option is hidden there
+   ([DEPLOY_FREE_TIER.md](DEPLOY_FREE_TIER.md#free-tier-limits-you-will-notice)).
 6. **Departure**: *Leave now*, or *Leave at…* and choose a time up to 7 days ahead.
 7. Click **Find routes** (usually 2–3 seconds).
 
@@ -50,10 +58,20 @@ collected speed history. These are sample points, not city-wide coverage.
 
 ## 4. Create an account and sign in
 
-**Sign in** (top right) → *New here? Create an account*. Password: at least 10
-characters with upper- and lower-case letters and a digit.
+The sign-in screen appears whenever you are signed out. Choose *New here? Create an
+account*. Password: at least 10 characters with upper- and lower-case letters and a
+digit.
 
-Signed in, you can:
+How sign-in works depends on how the server is configured
+([AUTHENTICATION.md](AUTHENTICATION.md)):
+
+* **Firebase sign-in** (when the server has `FIREBASE_PROJECT_ID` set): e-mail and
+  password or *Continue with Google*. You must verify your e-mail address before the
+  app lets you in; *Forgot password?* sends a reset link.
+* **Built-in accounts** (no Firebase configured, `LEGACY_AUTH_ENABLED=true`): e-mail
+  and password only. There is no e-mail verification and no password reset.
+
+Signed in, you can plan routes and view traffic (§1–§3), and also:
 
 * tick **Save to my trip history** before *Find routes*;
 * **My account → Trip history**: view or delete saved trips;
@@ -90,9 +108,10 @@ tablet and desktop screens. On a phone you can add it to the home screen:
 Safari → Share → *Add to Home Screen*, or Chrome → ⋮ → *Add to Home screen*.
 
 **Android app (APK)**: install the provided `.apk` (you may need to allow installing apps
-from your browser or file manager). Then open **Account → Server**, enter the HTTPS address
-you were given (for example `https://<name>.trycloudflare.com`) and tap **Test and save**.
-The app offers Navigate, Traffic and Account (sign-in, trip history, GPS trip recording,
+from your browser or file manager). The app opens on its sign-in screen, which also has
+the **Server** setting (later under **Account → Server**). Enter the HTTPS address
+you were given (for example `https://<name>.trycloudflare.com`), tap **Test and save**,
+then sign in. The app offers Navigate, Traffic and Account (sign-in, trip history, GPS trip recording,
 incident reports) on the same backend as the website.
 
 **iPhone/iPad app**: not yet installable. App Store Expo Go does not support SDK 58 yet,

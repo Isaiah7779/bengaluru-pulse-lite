@@ -68,9 +68,10 @@ flowchart LR
 
 ## Request lifecycle: `POST /v1/routes`
 
+0. `app_access` resolves the signed-in user; without one the request gets `401` (`API_AUTH_REQUIRED=true`, the default).
 1. Validate the body (`RouteRequestV2`); resolve the vehicle → OSRM server for that profile (503 `mode_unavailable` if absent; never substituted).
 2. OSRM primary route (+ native alternatives) = **reference route**.
-3. 10 corridor via-point routes in parallel (5 concurrent), snapped by OSRM.
+3. Up to 10 corridor via-point routes, 5 at a time (defaults; `OSRM_CORRIDOR_MAX`, `OSRM_MAX_CONCURRENCY`), snapped by OSRM.
 4. Filter: detour limits, U-turn spurs; geometric dedup (symmetric overlap ≥ 0.85).
 5. TomTom timing per candidate (supportingPoints; departAt for future); reject if length differs > 8 %.
 6. Evidence: incidents *on* the route, monitored-point observations (+ forecast if an evaluated model is active), weather at departure.
