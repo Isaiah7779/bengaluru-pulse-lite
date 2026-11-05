@@ -92,6 +92,20 @@ def test_empty_corpus_says_not_found_instead_of_guessing(client, user_headers):
     assert not body["refused"] and body["citations"] == [] and "could not find" in body["answer"]
 
 
+def test_database_failure_returns_503_without_partial_answer(client, user_headers, corpus, monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    from assistant import retrieval
+
+    def broken(self, *a, **k):
+        raise OperationalError("select", {}, Exception("connection refused"))
+
+    monkeypatch.setattr(retrieval.BM25Retriever, "search", broken)
+    r = client.post("/v1/assistant/ask", json={"question": "What is a shortcut in Pulse?"}, headers=user_headers)
+    assert r.status_code == 503 and r.json()["error"]["code"] == "assistant_unavailable"
+    assert "connection refused" not in r.text
+
+
 def test_input_limits(client, user_headers):
     assert client.post("/v1/assistant/ask", json={"question": ""}, headers=user_headers).status_code == 422
     assert client.post("/v1/assistant/ask", json={"question": "x" * 501}, headers=user_headers).status_code == 422

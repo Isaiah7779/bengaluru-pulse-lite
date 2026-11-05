@@ -103,6 +103,8 @@ class PostgresFTSRetriever:
         self.session = session
 
     def _run(self, query_sql: str, params: Dict, visible: Sequence[str]) -> List[Hit]:
+        # Bound every search so a slow database cannot hold a request (and a worker) open.
+        self.session.execute(text("SET LOCAL statement_timeout = '3s'"))
         sql = text(_PG_SQL.text.replace("{query}", query_sql))
         rows = self.session.execute(sql, {**params, "visible": list(visible), "now": _now(), "pool": CANDIDATE_POOL})
         return [Hit(r.id, r.source_ref, r.heading_path, float(r.score), r.snippet, r.measured_on) for r in rows]

@@ -13,9 +13,11 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Sequence
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from assistant import safety, scope
+from core.errors import UpstreamUnavailable
 from assistant.retrieval import Hit, build_query, get_retriever
 from assistant.text import content_tokens
 from db.models import RagChunk, RagDocument
@@ -135,7 +137,12 @@ def ask(session: Session, question: str, k: int = 5) -> AskResult:
 
     retriever = get_retriever(session)
     query = _NAME.sub(" ", q).strip() or q
-    hits = retriever.search(query, k=k)
+    try:
+        hits = retriever.search(query, k=k)
+    except SQLAlchemyError as exc:  # RAG_SAFETY.md §8: 503, no partial answer
+        session.rollback()
+        raise UpstreamUnavailable("The assistant's document store is unavailable; try again shortly",
+                                  code="assistant_unavailable") from exc
     if not hits:
         return done(AskResult(NOT_FOUND, False, scope=scope.IN_SCOPE, retriever=retriever.name,
                               reason="no_retrieval_hits"))
