@@ -16,6 +16,12 @@ def test_health_is_dependency_free(client):
     assert "x-request-id" in r.headers
 
 
+def test_request_id_echoes_only_plain_tokens(client):
+    assert client.get("/health", headers={"X-Request-ID": "abc-123.x_y"}).headers["x-request-id"] == "abc-123.x_y"
+    replaced = client.get("/health", headers={"X-Request-ID": "a" * 65}).headers["x-request-id"]
+    assert len(replaced) == 16 and replaced != "a" * 16
+
+
 def test_ready_reports_osrm_down(client):
     r = client.get("/health/ready")
     assert r.status_code == 503  # fake OSRM hosts are unreachable in tests

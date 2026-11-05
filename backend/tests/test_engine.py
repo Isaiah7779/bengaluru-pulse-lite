@@ -134,6 +134,26 @@ def test_avoid_validation_and_passthrough():
     assert err.value.code == "unsupported_avoid"
 
 
+def test_avoid_disabled_for_servers_without_exclude():
+    from routing.route_profiles import get_vehicle_metadata
+
+    settings = get_settings().model_copy(update={"osrm_exclude_supported": False})
+    assert get_vehicle_metadata("car", settings)["avoid_options"] == []
+    osrm = FakeOSRM([osrm_route(DIRECT)])
+    with pytest.raises(AppError) as err:
+        plan(engine(osrm, osrm_exclude_supported=False), req(avoid=["toll"]))
+    assert err.value.code == "unsupported_avoid"
+    assert not osrm.calls
+    plan(engine(osrm, osrm_exclude_supported=False), req())
+    assert not osrm.calls[0]["exclude"]
+
+
+def test_corridor_requests_can_be_capped_for_public_servers():
+    osrm = FakeOSRM([osrm_route(DIRECT)], corridor_routes=[osrm_route(EAST)] * 10)
+    plan(engine(osrm, osrm_corridor_max=3, osrm_max_concurrency=1), req())
+    assert len(osrm.calls) == 1 + 3
+
+
 def test_invalid_departures_and_same_place():
     e = engine(FakeOSRM([osrm_route(DIRECT)]))
     with pytest.raises(AppError):

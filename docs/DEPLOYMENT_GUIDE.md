@@ -5,6 +5,10 @@ Compose. It is **not publicly deployed**: that needs a hosting account only the
 project owner can create. The production configuration below is prepared but has
 **not been executed on a real server**. Cost so far: ₹0.
 
+**Update (3 Nov 2026):** a free-tier path (Render for the API and database, Vercel for
+the web apps) was added in [DEPLOY_FREE_TIER.md](DEPLOY_FREE_TIER.md). No public
+deployment from either path has been verified.
+
 ## 1. Prerequisites
 
 | Item | Local | Production server |
@@ -58,11 +62,16 @@ database: 68,761 places loaded, administrator created). See
 docker compose ps                                   # all services Up; backend/osrm/postgres "healthy"
 curl http://localhost:8000/health                   # {"status":"ok",...}
 curl http://localhost:8000/health/ready             # every check "ok" (tomtom "not_configured" without a key)
-curl -X POST http://localhost:8000/v1/routes -H "Content-Type: application/json" \
+# Route planning needs a signed-in user (API_AUTH_REQUIRED=true is the default).
+# With built-in accounts, get a token from /v1/auth/login first:
+TOKEN=$(curl -s -X POST http://localhost:8000/v1/auth/login -H "Content-Type: application/json" \
+  -d '{"email":"you@example.org","password":"<your password>"}' | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -X POST http://localhost:8000/v1/routes -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
   -d '{"origin":{"lat":12.9698,"lon":77.75},"destination":{"lat":12.8456,"lon":77.6603}}'
+# Without the Authorization header the same request returns 401.
 ```
 
-Then open http://localhost:8080, plan a route, and sign in as the administrator to see
+Then open http://localhost:8080, sign in as the administrator, plan a route, and open
 **Admin → System health**. Collection is working when `docker compose logs collector`
 shows `Flow sweep: {'stored': 26, ...}` every 30 minutes.
 

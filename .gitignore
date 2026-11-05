@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+.streamlit/secrets.toml
 
 # Python
 __pycache__/
@@ -55,3 +56,6 @@ GoogleService-Info.plist
 !mobile/android/app/debug.keystore
 *.jks
 keystore.properties
+.vercel
+.env*
+!.env.example

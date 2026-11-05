@@ -9,9 +9,11 @@ faster) and **longcuts** (longer but faster) against a stated reference route, a
 shows where every number came from. When a data source is unavailable the app says
 so; nothing is simulated.
 
-> Project status (Oct 2026): runs end-to-end locally with Docker. **Not publicly
-> deployed. No forecasting model has been validated yet**; see
-> [docs/RESULTS_AND_LIMITATIONS.md](docs/RESULTS_AND_LIMITATIONS.md).
+> Project status (3 Nov 2026): runs end-to-end locally with Docker. A free-tier
+> deployment configuration (Render + Vercel) is in the repository, but **no public
+> deployment has been verified. No forecasting model has been validated yet**; see
+> [docs/RESULTS_AND_LIMITATIONS.md](docs/RESULTS_AND_LIMITATIONS.md). Every app page
+> and API endpoint except `/health` requires sign-in.
 
 ## Features
 
@@ -24,7 +26,7 @@ so; nothing is simulated.
 | Preferences: fastest, shortest, least traffic now/predicted, balanced; avoid tolls/expressways/ferries | documented scoring |
 | Shortcut / longcut labels | strict definitions, same time basis |
 | Incidents, monitored traffic points, weather | collected from TomTom and Open-Meteo |
-| Mandatory sign-in: e-mail/password with verification, Google, password reset | Firebase Authentication (verified by the Firebase Admin SDK) |
+| Mandatory sign-in: e-mail/password with verification, Google, password reset | Firebase Authentication (verified by the Firebase Admin SDK); without Firebase configured, built-in e-mail/password accounts (no verification or reset) |
 | Personal favourites, journal and preferences | Cloud Firestore, owner-only security rules |
 | Accounts: trip history, incident reports, community route sharing, roles | PostgreSQL/PostGIS |
 | Admin: health, data freshness, moderation, model metrics, users, audit log | role checked in the backend |

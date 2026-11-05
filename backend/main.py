@@ -35,6 +35,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
+        allow_origin_regex=settings.cors_origin_regex,
         allow_credentials=False,  # bearer tokens, not cookies
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
@@ -53,7 +54,7 @@ def create_app() -> FastAPI:
 
     from fastapi import Depends
 
-    from api import admin, auth, community, forecast_api, geocode, health, legacy, me, routing_api, traffic_api
+    from api import admin, assistant, auth, community, forecast_api, geocode, health, legacy, me, routing_api, traffic_api
     from api.deps import app_access
 
     # Endpoint classes (see docs/AUTHENTICATION.md):
@@ -66,6 +67,18 @@ def create_app() -> FastAPI:
         app.include_router(module.router)
     for module in (me, routing_api, geocode, traffic_api, forecast_api, community, legacy):
         app.include_router(module.router, dependencies=[Depends(app_access)])
+    # Assistant: every endpoint also requires a signed-in user itself (docs/v3/RAG_SAFETY.md §5).
+    app.include_router(assistant.router, dependencies=[Depends(app_access)])
+
+    if settings.rag_load_snapshot_on_start:
+        try:
+            from assistant.ingest import load_snapshot
+            from db.session import session_scope
+
+            with session_scope() as s:
+                logger.info("Assistant corpus: %s", load_snapshot(s))
+        except Exception:  # the assistant is optional; the API must still start
+            logger.warning("Assistant corpus snapshot not loaded", exc_info=True)
 
     logger.info(
         "Bengaluru Pulse API %s started (env=%s, db=%s)",

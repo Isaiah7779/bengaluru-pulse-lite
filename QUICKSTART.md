@@ -31,7 +31,7 @@ docker compose run --rm -v "$(pwd)/data/osm:/data:ro" backend python -m geocodin
 docker compose exec backend python -m auth.bootstrap --email you@example.org --name "Your Name"
 ```
 
-* Web app: http://localhost:8080
+* Web app: http://localhost:8080 (every page needs sign-in; use the administrator created above or create an account)
 * API docs: http://localhost:8000/docs
 * Readiness (DB, OSRM ×3, TomTom budget, data freshness): http://localhost:8000/health/ready
 

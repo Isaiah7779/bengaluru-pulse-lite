@@ -68,6 +68,14 @@ def get_osrm_profile(vehicle: str) -> str:
     return get_profile(vehicle).osrm_profile
 
 
+def avoid_options(profile: VehicleProfile, settings: Optional[Settings] = None) -> tuple:
+    """Exclude classes usable with the configured server (none if it rejects `exclude`)."""
+
+    if settings is not None and not settings.osrm_exclude_supported:
+        return ()
+    return profile.excludable
+
+
 def server_url(settings: Settings, vehicle: str) -> Optional[str]:
     return settings.osrm_url_for(get_profile(vehicle).osrm_profile)
 
@@ -80,7 +88,7 @@ def get_vehicle_metadata(vehicle: str, settings: Optional[Settings] = None) -> D
         "lua_profile": profile.lua_profile,
         "profile_status": profile.profile_status,
         "traffic_supported": profile.tomtom_travel_mode is not None,
-        "avoid_options": list(profile.excludable),
+        "avoid_options": list(avoid_options(profile, settings)),
         "notes": profile.notes,
     }
     if settings is not None:

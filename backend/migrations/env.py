@@ -18,14 +18,15 @@ def include_object(obj, name, type_, reflected, compare_to) -> bool:
     """Compare only objects the ORM owns.
 
     Excludes PostGIS/TIGER extension tables and the PostGIS columns/indexes that
-    the migration adds on PostgreSQL only (geog columns, GiST and trigram indexes).
+    the migration adds on PostgreSQL only (geog columns, GiST and trigram indexes,
+    and the rag_chunks `tsv` column with its GIN index).
     """
 
     if type_ == "table" and reflected and compare_to is None:
         return False
-    if type_ == "column" and name == "geog":
+    if type_ == "column" and name in ("geog", "tsv"):
         return False
-    if type_ == "index" and name and (name.endswith("_geog") or name.endswith("_trgm")):
+    if type_ == "index" and name and (name.endswith("_geog") or name.endswith("_trgm") or name.endswith("_tsv")):
         return False
     return True
 

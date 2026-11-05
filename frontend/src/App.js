@@ -10,6 +10,7 @@ import Icon from "./components/Icons";
 import AboutPage from "./pages/AboutPage";
 import AccountPage from "./pages/AccountPage";
 import AdminPage from "./pages/AdminPage";
+import AskPage from "./pages/AskPage";
 import HomePage from "./pages/HomePage";
 import InsightsPage from "./pages/InsightsPage";
 import JournalPage from "./pages/JournalPage";
@@ -21,6 +22,7 @@ const PAGES = {
   navigate: { label: "Navigate", icon: "compass" },
   traffic: { label: "Traffic", icon: "pulse" },
   insights: { label: "Insights", icon: "chart" },
+  ask: { label: "Ask", icon: "spark" },
   journal: { label: "Journal", icon: "book" },
   about: { label: "About", icon: "info" },
   account: { label: "My account", icon: "user" },
@@ -100,6 +102,7 @@ function Shell() {
           {current === "home" && <HomePage />}
           {current === "navigate" && <NavigatePage />}
           {current === "insights" && <InsightsPage />}
+          {current === "ask" && <AskPage />}
           {current === "journal" && <JournalPage />}
           {current === "about" && <AboutPage />}
           {current === "traffic" && <TrafficPage />}

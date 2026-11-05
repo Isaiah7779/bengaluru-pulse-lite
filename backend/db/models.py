@@ -10,13 +10,14 @@ All timestamps are timezone-aware UTC.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -377,3 +378,71 @@ class LegacyPrediction(Base):
     weather: Mapped[str] = mapped_column(String(32))
     predicted_congestion: Mapped[float] = mapped_column(Float)
     traffic_status: Mapped[str] = mapped_column(String(16))
+
+
+# ---------------------------------------------------------------------------
+# V3 assistant: retrieval corpus (docs/v3/RETRIEVAL_FTS.md)
+# On PostgreSQL migration 0004 adds a generated `tsv tsvector` column and a GIN
+# index to rag_chunks; like `geog`, they are not mapped here.
+# ---------------------------------------------------------------------------
+
+
+class RagDocument(Base):
+    __tablename__ = "rag_documents"
+    __table_args__ = (UniqueConstraint("source_type", "source_ref", name="uq_rag_document_source"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_type: Mapped[str] = mapped_column(String(32))  # doc | eval_report
+    source_ref: Mapped[str] = mapped_column(String(256))  # repository path
+    title: Mapped[str] = mapped_column(String(200))
+    commit_sha: Mapped[Optional[str]] = mapped_column(String(40))
+    content_hash: Mapped[str] = mapped_column(String(64))
+    visibility: Mapped[str] = mapped_column(String(16), default="user")  # user | admin
+    ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    chunks = relationship("RagChunk", back_populates="document", cascade="all, delete-orphan", passive_deletes=True)
+
+
+class RagChunk(Base):
+    __tablename__ = "rag_chunks"
+    __table_args__ = (UniqueConstraint("document_id", "ordinal", name="uq_rag_chunk_ordinal"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("rag_documents.id", ondelete="CASCADE"))
+    ordinal: Mapped[int] = mapped_column(Integer)
+    heading_path: Mapped[str] = mapped_column(String(400))
+    body: Mapped[str] = mapped_column(Text)
+    measured_on: Mapped[Optional[date]] = mapped_column(Date)
+    valid_from: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    meta: Mapped[Optional[dict]] = mapped_column(JSON)
+
+    document = relationship("RagDocument", back_populates="chunks")
+
+
+class RagQuery(Base):
+    """Assistant request log. No user id by design (docs/v3/RAG_SAFETY.md §7)."""
+
+    __tablename__ = "rag_queries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    endpoint: Mapped[str] = mapped_column(String(32))
+    question: Mapped[Optional[str]] = mapped_column(String(500))
+    chunk_ids: Mapped[Optional[list]] = mapped_column(JSON)
+    refusal_code: Mapped[Optional[str]] = mapped_column(String(32))
+    guard_result: Mapped[Optional[str]] = mapped_column(String(32))
+    composer: Mapped[str] = mapped_column(String(32), default="none")
+    latency_ms: Mapped[Optional[float]] = mapped_column(Float)
+
+
+class RagEvalRun(Base):
+    __tablename__ = "rag_eval_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    golden_set: Mapped[str] = mapped_column(String(64))
+    retriever: Mapped[str] = mapped_column(String(32))
+    commit_sha: Mapped[Optional[str]] = mapped_column(String(40))
+    metrics: Mapped[dict] = mapped_column(JSON)

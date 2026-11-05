@@ -1,0 +1,1166 @@
+{
+ "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+ "documents": [
+  {
+   "source_type": "doc",
+   "source_ref": "docs/ROUTING.md",
+   "title": "Routing",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "e8e1dcc6342fca77429466dbc1f1ba2de343c37de0c1c5ed02c8e0fc73ea72f3",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Routing › Road graphs and vehicle modes",
+     "body": "| Mode | Graph | Lua profile | Status | Traffic applied |\n|---|---|---|---|---|\n| car | `data/osm/bengaluru.osrm` | car.lua | dedicated | TomTom (`travelMode=car`) |\n| motorcycle | car graph | car.lua | **car-graph approximation** (disclosed in every response) | TomTom (`travelMode=motorcycle`) |\n| bicycle | `data/osrm-bicycle/` | bicycle.lua | dedicated | not applicable |\n| walk | `data/osrm-foot/` | foot.lua | dedicated | not applicable |\n\n* Source: OpenStreetMap via Geofabrik *India – Southern Zone* (snapshot 2026‑09‑26),\n  cut to lon 77.00–78.00, lat 12.45–13.42 (`infrastructure/osrm/prepare_graphs.sh`).\n* **Why separate servers:** OSRM ignores the profile name in the URL. Asking the car\n  server for `/route/v1/foot/…` returned the identical car route (verified during the\n  audit). Modes therefore map to servers; a mode without its server returns\n  `503 mode_unavailable` rather than silently using another graph.\n* Measured resources: car graph ≈ 540 MB on disk / ≈ 300 MB RSS; foot ≈ 420 MB /\n  ≈ 230 MB; bicycle ≈ 427 MB / ≈ 235 MB. Each build took ~3 min, peak ≈ 0.6 GB RAM.\n* Motorcycle limitation: OSRM has no motorcycle profile; restrictions specific to\n  two-wheelers are not modelled.\n\nMeasured speeds, Indiranagar → Yeshwanthpur (live OSRM): car 14.7 km / 17.2 min\n(free-flow), foot 14.39 km / 172.9 min (≈ 5 km/h), bicycle 14.83 km / 62.9 min (≈ 14 km/h).",
+     "measured_on": "2026-09-26",
+     "content_hash": "44704c899b41b670d69db77f986cdc1b190f4be28731da3e4205c4a24a74495e",
+     "meta": {
+      "headings": [
+       "Road graphs and vehicle modes"
+      ],
+      "source_ref": "docs/ROUTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "Routing › Candidate generation",
+     "body": "1. OSRM primary route with `alternatives=3` → **reference route** (OSRM's default\n   free-flow fastest route for the mode) plus native alternatives.\n2. Corridor routes: via-points placed perpendicular to the straight line at\n   7 / 14 / 24 / 34 % of the trip length (clamped 300 m – 7 km) on both sides\n   (two via-points at 30 % and 70 %), plus two single mid-points at 18 %.\n   10 requests, 5 concurrently. Trips under 400 m skip corridors.\n   These are the defaults (`OSRM_CORRIDOR_MAX=10`, `OSRM_MAX_CONCURRENCY=5`); the\n   free-tier configuration (`render.yaml`) uses 4 corridor requests, one at a time, to\n   stay within the public OSRM servers' limits, so it finds fewer alternatives.\n3. Filters: distance ≤ 1.5 × reference + 1 km, duration ≤ 1.5 × reference + 3 min;\n   corridor routes retracing ≥ 120 m of road already used (U-turn spurs at a\n   snapped via-point) are dropped.\n4. Geometry-aware dedup: routes resampled every 50 m; similarity = min of the two\n   directional fractions within 40 m of the other route; ≥ 0.85 ⇒ duplicate.\n5. Up to 5 routes returned (configurable).",
+     "measured_on": null,
+     "content_hash": "7f3a4452e4a8749fdf5ff4d1428080635ee5708f888f79b74361442222e94db7",
+     "meta": {
+      "headings": [
+       "Candidate generation"
+      ],
+      "source_ref": "docs/ROUTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "Routing › Traffic timing",
+     "body": "* TomTom Calculate Route with the candidate's geometry as `supportingPoints`\n  (≤ 120 points), `computeTravelTimeFor=all` → live ETA, traffic delay,\n  no-traffic time, historic (typical) time.\n* Future departures (> 15 min ahead) send `departAt`; TomTom then predicts from\n  historical patterns. This is labelled `traffic_predicted` and attributed to TomTom.\n* **Reconstruction check:** if TomTom's route length differs from OSRM's by > 8 %,\n  TomTom has timed a different road; the timing is rejected and the note explains why.\n* Budget: at most 5 timings per request, cached 5 min per geometry/departure bucket,\n  under the shared daily TomTom quota (see TRAFFIC.md).",
+     "measured_on": null,
+     "content_hash": "3a3ac2efc113465a78939676d529ca939c7928f975ab49c7d8840433138c5d99",
+     "meta": {
+      "headings": [
+       "Traffic timing"
+      ],
+      "source_ref": "docs/ROUTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "Routing › Comparison basis and preferences",
+     "body": "* If the reference route has a valid traffic timing, the comparison basis is that\n  traffic basis and only traffic-timed routes are ranked (\"comparable\"); others are\n  listed with their free-flow time and marked not comparable. Otherwise everything\n  is compared on OSRM free-flow, with a warning that real traffic is usually slower.\n\n| Preference | Ranking key | Fallback |\n|---|---|---|\n| fastest | ETA | — |\n| shortest | distance | — |\n| least_traffic_now | TomTom delay (+0.01·ETA tie-break) | fastest if no traffic; predicted if departure is in the future |\n| least_traffic_predicted | TomTom predicted delay | fastest if no traffic; \"now\" if departing now |\n| balanced | 0.60·time + 0.20·distance + 0.10·delay share + 0.10·incidents | — |\n\nBalanced components are relative to the best comparable route (time/best − 1, etc.);\nincidents add 0.5 per major/closure and 0.1 per other incident on the route (capped at 1).\nThese weights are a documented product choice, not a learned model.\n\nAvoid options: `toll`, `motorway`, `ferry` (car and motorcycle only, one at a time;\nOSRM's car profile rejects combinations). They are offered only when\n`OSRM_EXCLUDE_SUPPORTED=true` (default); the public OSRM servers used by the free-tier\nconfiguration reject `exclude`, so there the options are not offered. Verified: Electronic City → Kengeri uses\nNICE Road (27.47 km, 22.7 min); with `avoid=toll` it uses the service road\n(26.42 km, 31.6 min).",
+     "measured_on": null,
+     "content_hash": "81a2f3247c4a1760800e3fe334566db20d0111138b90083e577079d5316b8437",
+     "meta": {
+      "headings": [
+       "Comparison basis and preferences"
+      ],
+      "source_ref": "docs/ROUTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 4,
+     "heading_path": "Routing › Shortcut / longcut classification (`routing/classification.py`)",
+     "body": "Against the clearly identified reference route, on the **same time basis**:\n\n* **SHORTCUT** — shorter distance **and** shorter travel time.\n* **LONGCUT** — longer distance **and** shorter travel time.\n* **ALTERNATIVE** — anything else (incl. equal metrics, shorter-but-slower, longer-and-slower).\n* **UNCLASSIFIED** — a metric is missing/invalid, or the time bases differ.\n\nDifferences within max(50 m, 1 %) distance or max(30 s, 2 %) time are \"equal\"\n(measurement noise). Each label carries the signed differences and a sentence.\nIf a route lacks a traffic timing while the reference has one, both are compared\non free-flow instead. Tested exhaustively in `tests/test_classification.py`.\n\nObserved on live data (2026‑10‑22, TomTom live traffic): Whitefield → Electronic City\nreturned a **shortcut** (21.4 km / 66 min vs reference 24.7 km / 77 min) and a\n**longcut** (26.4 km / 71 min).",
+     "measured_on": "2026-10-22",
+     "content_hash": "22d5b8b6d249903bf78c83a574454b9dcbacbfac13dbc279c2b0f7c5ae8f8817",
+     "meta": {
+      "headings": [
+       "Shortcut / longcut classification (`routing/classification.py`)"
+      ],
+      "source_ref": "docs/ROUTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 5,
+     "heading_path": "Routing › Evidence attached to each route",
+     "body": "* **Incidents on the route:** line incidents count only when ≥ 50 % of them (or\n  ≥ 60 m) lies within 20 m of the route; point incidents within 25 m. Closures on\n  crossing side-streets are excluded. Walking/cycling show only closures,\n  flooding, road works, hazards and accidents.\n* **Monitored points:** the nearest point of the TomTom segment to the monitoring\n  location must lie within 120 m of the route; observations older than 90 min\n  are shown as not fresh.\n* **Weather** at the origin for the departure time (Open-Meteo; advisory only, no\n  travel-time adjustment).\n* **Long-detour warning** when the route exceeds 1.8 × the straight-line distance\n  (e.g. destination on a flyover carriageway).",
+     "measured_on": null,
+     "content_hash": "9fdf43d4b19fea2c8fbbb4e4808855770c233458c283efb8e5e4b94c2a837523",
+     "meta": {
+      "headings": [
+       "Evidence attached to each route"
+      ],
+      "source_ref": "docs/ROUTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 6,
+     "heading_path": "Routing › Benchmarks (live OSRM, `tests/test_integration_live.py`)",
+     "body": "| Trip | Reference (km) | Test bounds | Result |\n|---|---|---|---|\n| Whitefield → Marathahalli | 7.6 | 5–12 | pass |\n| Whitefield → Electronic City | 24.7 | 18–35 | pass |\n| Indiranagar → Yeshwanthpur | 14.7 | 10–22 | pass |\n| Airport (KIA) → Whitefield | 38.0 | 30–50 | pass |\n| Koramangala → Hebbal | 15.3 | 11–22 | pass |\n\nEach also asserts navigation steps ending in \"Arrive\", full geometry, valid\nclassifications and no near-duplicate routes. Typical latency with TomTom timing:\n2–3 s; without TomTom: 1.4–2.3 s per request (local Docker, 8-core laptop).",
+     "measured_on": null,
+     "content_hash": "6840d72eb708de9937e4a4b78c06a38e3be47d1bfb42007e539741da29081e63",
+     "meta": {
+      "headings": [
+       "Benchmarks (live OSRM, `tests/test_integration_live.py`)"
+      ],
+      "source_ref": "docs/ROUTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 7,
+     "heading_path": "Routing › Resilience",
+     "body": "* OSRM circuit breaker: after a connect failure/timeout a server is treated as\n  down for 20 s and requests fail in ~0.3 s instead of waiting on DNS/sockets.\n* TomTom failures, quota exhaustion and mismatches degrade to free-flow with an\n  explanation per route; routing never fails because of the traffic provider.",
+     "measured_on": null,
+     "content_hash": "99915add08e1d5a2edbe3092db8e4ecc6dd903789fab20428e707d84a24bc564",
+     "meta": {
+      "headings": [
+       "Resilience"
+      ],
+      "source_ref": "docs/ROUTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 8,
+     "heading_path": "Routing › Known limitations",
+     "body": "* No turn-by-turn voice guidance or rerouting while driving (route planning only).\n* Corridor candidates are geometric heuristics; the k-shortest-paths problem is not solved exactly.\n* Community-verified shortcuts are displayed on the map but not injected as candidates.\n* Free-flow OSRM durations are optimistic for Bengaluru; the UI says so whenever they are used.",
+     "measured_on": null,
+     "content_hash": "eb5775dc59b7e6eb9e559f36ac1b5e646cc825d28d5d884e81ea1577a43d4256",
+     "meta": {
+      "headings": [
+       "Known limitations"
+      ],
+      "source_ref": "docs/ROUTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "doc",
+   "source_ref": "docs/TRAFFIC.md",
+   "title": "Traffic, weather and incident data",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "1e616e21b70ea676841ed6e0b795e84b40e3e00f173e2d188fd3b451008ab37d",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Traffic, weather and incident data › Sources",
+     "body": "| Data | Provider | Endpoint | Frequency | Coverage |\n|---|---|---|---|---|\n| Flow (speed vs free-flow) | TomTom Traffic Flow Segment v4 | `flowSegmentData/absolute/10` | every 30 min | **26 monitored sample points** on major corridors (`traffic/segments.py`) |\n| Incidents | TomTom Traffic Incident Details v5 | `incidentDetails` (bbox 77.35–77.90, 12.75–13.26) | hourly | whole metro bbox |\n| Route timing | TomTom Routing v1 | `calculateRoute` (POST, supportingPoints) | per route request | per route |\n| Weather | Open-Meteo | `/v1/forecast` current + hourly | every 30 min | 6 area points (central/east/north/south/west/airport) |\n| Community incidents | users | `POST /v1/incidents/report` | on demand | pending until an admin publishes |\n\n**Coverage statement.** Flow observations exist only at the 26 monitored points.\nThey are *samples*, not city-wide coverage; the UI and API say so\n(`coverage_note`). Some points snap to minor roads (e.g. the Bannerghatta Road\npoint resolved to an FRC5 road in the first sweep) — the returned road class and\ngeometry are stored and visible to admins.",
+     "measured_on": null,
+     "content_hash": "1274b990324a22080db9c2f57715ee79cca4c54c1c7449bfbfb332aa430fedaf",
+     "meta": {
+      "headings": [
+       "Sources"
+      ],
+      "source_ref": "docs/TRAFFIC.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "Traffic, weather and incident data › Quota budget (TomTom free tier: 2,500 non-tile requests/day, verified 2026-10-22)",
+     "body": "* `TOMTOM_DAILY_BUDGET=2000` hard cap enforced in the database (`provider_calls`),\n  shared by all processes; `background_reserve=500` keeps calls for users —\n  the collector stops when only the reserve remains.\n* Collector: 26 × 48 flow sweeps (1,248) + 24 incident sweeps ≈ 1,272/day.\n* Routing: ≤ 5 timings per request, cached 5 minutes.\n* After restarts the collector resumes its previous schedule instead of polling\n  immediately (each flow sweep costs 26 calls).\n* Measured on the first day (2026‑10‑22, partial): 188 TomTom calls by ~05:35 UTC.",
+     "measured_on": "2026-10-22",
+     "content_hash": "79bc0e293861a0d898cc6ea985ff9b105f9efed2e43c7916dc7da551b55ec774",
+     "meta": {
+      "headings": [
+       "Quota budget (TomTom free tier: 2,500 non-tile requests/day, verified 2026-10-22)"
+      ],
+      "source_ref": "docs/TRAFFIC.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "Traffic, weather and incident data › Ingestion pipeline",
+     "body": "1. **Validate** (`providers/tomtom.parse_flow` etc.): speeds 0–200 km/h,\n   free-flow > 0, zero current speed only with a road closure, confidence in [0,1];\n   incidents need an id and a location; Open-Meteo temperature −10…55 °C.\n   Invalid readings are counted and skipped, never stored.\n2. **Normalise**: timestamps to UTC minute buckets; speed ratio capped at 1.5.\n3. **De-duplicate**: unique (segment, minute, source) and (area, minute, source);\n   incidents upsert on (source, external_id).\n4. **Staleness**: observations older than 90 min are reported as `stale`;\n   incidents absent from the latest sweep are deactivated.\n5. **Failure handling**: each task is isolated; failures back off exponentially\n   (×2 … ×8 interval); quota exhaustion stops background polling cleanly.",
+     "measured_on": null,
+     "content_hash": "a13c791b6a0f680fe30eb1a902a950128da9d1099e7f7337877206521f391a81",
+     "meta": {
+      "headings": [
+       "Ingestion pipeline"
+      ],
+      "source_ref": "docs/TRAFFIC.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "Traffic, weather and incident data › Read APIs",
+     "body": "* `GET /v1/traffic/segments` — latest observation per point with status fresh/stale/no_data.\n* `GET /v1/traffic/segments/{id}/history?hours=` — collected time series.\n* `GET /v1/incidents` — active published incidents (TomTom + moderated community).\n* `GET /v1/weather/current`, `/v1/weather/at?when=`, `/v1/weather/areas`.\n* Legacy `GET /hotspots`, `/incidents`, `/api/live-traffic/bengaluru` now serve the\n  same collected data (previously simulated).",
+     "measured_on": null,
+     "content_hash": "1dd013bec199d671ea17432b9b5068aeaae0a6bbf8906e0be8758bf25081cf94",
+     "meta": {
+      "headings": [
+       "Read APIs"
+      ],
+      "source_ref": "docs/TRAFFIC.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 4,
+     "heading_path": "Traffic, weather and incident data › Data collected so far (measured 2026-10-22 05:35 UTC)",
+     "body": "| Table | Rows | Period |\n|---|---|---|\n| traffic_observations | 156 | 03:16 – 05:35 UTC (first day) |\n| weather_observations | 36 | same |\n| incidents | 632 seen, 358 active | same |\n\nCollection continues while the `collector` container runs. Forecasting on these\nobservations requires ≥ 14 days (see ML_PIPELINE.md).",
+     "measured_on": "2026-10-22",
+     "content_hash": "ab7a30f12cc73a0266217a9a80e061bdc2e70a0d086d68070522b516066ccc1d",
+     "meta": {
+      "headings": [
+       "Data collected so far (measured 2026-10-22 05:35 UTC)"
+      ],
+      "source_ref": "docs/TRAFFIC.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 5,
+     "heading_path": "Traffic, weather and incident data › Terms and attribution",
+     "body": "* **TomTom:** used within the free developer tier. I could not locate an explicit\n  clause on storing API responses; collected observations are therefore kept as\n  private research data and are not redistributed. The owner should confirm the\n  applicable TomTom terms before publishing any dataset derived from them.\n* **Open-Meteo:** CC BY 4.0; attribution shown wherever weather appears.\n* **OpenStreetMap:** ODbL; attribution on every map and search result.",
+     "measured_on": null,
+     "content_hash": "fff2d84c500e6f464a1d888e9736f5f959f2ec29b68978e2bcce4267d1c429ee",
+     "meta": {
+      "headings": [
+       "Terms and attribution"
+      ],
+      "source_ref": "docs/TRAFFIC.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "doc",
+   "source_ref": "docs/ML_PIPELINE.md",
+   "title": "Forecasting pipeline",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "dfa193e67d04ce3f11582e23fdec6a1a8b0df678f9e5b9c953da6d08702bb88f",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Forecasting pipeline",
+     "body": "Code: `backend/forecasting/pipeline.py` (train/evaluate/register),\n`segment_model.py` (serving), `predictor.py` (activation gate).\n\n```bash\ncd backend\npython -m forecasting.pipeline research   # public daily dataset\npython -m forecasting.pipeline segments   # collected TomTom observations\n```\n\nReports: `backend/evaluation/v2/<task>.json`; registry: `model_versions` and\n`evaluation_records` (one row per horizon × split × candidate × metric);\nartifacts: `backend/models/*.joblib`.",
+     "measured_on": null,
+     "content_hash": "73e8556dd63557211e0de18f693eb7f21564a77ea541dae68b43e92a9bac034d",
+     "meta": {
+      "headings": [],
+      "source_ref": "docs/ML_PIPELINE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "Forecasting pipeline › Method",
+     "body": "1. **Validate** — duplicates, nulls, ranges, share at cap, lag-1 autocorrelation,\n   day-of-week spread.\n2. **Features** at the forecast origin only: last observed value and its age,\n   lags, rolling mean/std, seasonal value, calendar of the *target* time,\n   historical average (computed from the training split only).\n3. **Chronological split by target time**: train (≈65 %) < validation (15 %) < test (20 %).\n4. **Baselines first**: persistence, seasonal naive (same slot one week earlier),\n   historical average (series × weekday[/half-hour]).\n5. **Models**: ridge regression; HistGradientBoosting (4 settings). Selection on\n   validation MAE; the selected model is refit on train+validation and evaluated\n   **once** on test.\n6. **Metrics**: MAE, RMSE, sMAPE, MAPE, R², bias, n.\n7. **Activation gate**: a model is used by routing only if its test MAE is ≥ 5 %\n   below the best baseline on **every** horizon with ≥ 500 test samples\n   (segments task). Otherwise it is registered as `candidate`.",
+     "measured_on": null,
+     "content_hash": "8f3f9878d291a806754ffcb2f9db8ec6647f026eb8692ee4cbbb5d8b662fe8ca",
+     "meta": {
+      "headings": [
+       "Method"
+      ],
+      "source_ref": "docs/ML_PIPELINE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "Forecasting pipeline › Track A — public daily dataset (research)",
+     "body": "`Banglore_traffic_Dataset.csv`: 8,936 rows, 16 roads, daily, 2022‑01‑01 → 2024‑08‑09,\n~9 roads per day. Provenance undocumented.\n\n**Data validation findings (measured):**\n\n| Check | Value | Interpretation |\n|---|---|---|\n| Duplicates / nulls / out of range | 0 / 0 / 0 | clean |\n| Rows at congestion = 100 (cap) | 43.5 % | heavily censored target |\n| Lag-1 autocorrelation per road | mean −0.008 (range −0.074 … 0.068) | **no temporal persistence** |\n| Day-of-week mean spread | 1.15 points (of 0–100) | **no weekly seasonality** |\n\nReal urban traffic shows strong daily/weekly patterns and autocorrelation; this\ndataset behaves like independent draws around road-specific means, consistent with\nsynthetic data. That bounds what any forecaster can achieve on it.\n\n**Task:** congestion level per road, 1 day and 7 days ahead. Splits (target time):\ntrain 2022‑01‑02 → 2023‑09, validation 2023‑09‑12 → 2024‑01, test 2024‑02‑01 → 2024‑08‑09.\n\n**Test results (measured, `evaluation/v2/research-daily-congestion.json`):**\n\n| Horizon | Candidate | MAE | RMSE | sMAPE % | R² | n |\n|---|---|---|---|---|---|---|\n| 1 d | persistence | 20.217 | 29.124 | 30.13 | −0.541 | 1791 |\n| 1 d | seasonal naive | 19.737 | 28.529 | 29.54 | −0.478 | 1791 |\n| 1 d | **historical average** | **15.985** | **20.492** | 22.73 | 0.237 | 1791 |\n| 1 d | ridge (selected) | 16.079 | 20.606 | 22.84 | 0.229 | 1791 |\n| 7 d | persistence / seasonal naive | 19.661 | 28.414 | 29.17 | −0.462 | 1774 |\n| 7 d | **historical average** | **16.008** | **20.528** | 22.78 | 0.237 | 1774 |\n| 7 d | ridge (selected) | 16.097 | 20.612 | 22.91 | 0.230 | 1774 |\n\nValidation MAE (1 d): ridge 16.015, HGB 16.52–17.28, historical average 16.042.\n**Conclusion:** no model beats the historical average (ridge is 0.6 % worse on test);\nthe model is registered as `candidate`, not activated. This is the expected outcome\ngiven the absence of temporal signal.",
+     "measured_on": "2022-01-01",
+     "content_hash": "226cd6d0ebf938800b1bdca832c374f8b107b8fefc4996f45eaf4b0b5d8c6ac7",
+     "meta": {
+      "headings": [
+       "Track A — public daily dataset (research)"
+      ],
+      "source_ref": "docs/ML_PIPELINE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "Forecasting pipeline › Track A — public daily dataset (research)",
+     "body": "Validation MAE (1 d): ridge 16.015, HGB 16.52–17.28, historical average 16.042.\n**Conclusion:** no model beats the historical average (ridge is 0.6 % worse on test);\nthe model is registered as `candidate`, not activated. This is the expected outcome\ngiven the absence of temporal signal.\n\n**Re-examining the V1 model.** V1 reported R² 0.958 from a random split on 492 rows,\nusing *same-day* traffic volume and speed as inputs. Reproduced on the full dataset:\n\n| Setting | MAE | RMSE | R² |\n|---|---|---|---|\n| Same-day volume + speed, random split | 3.00 | 4.67 | 0.960 |\n| Same-day volume + speed, chronological split | 2.98 | 4.60 | 0.962 |\n| Chronological, without same-day measurements | 16.03 | 20.57 | 0.232 |\n\nThe V1 accuracy is genuine for **same-day estimation** (congestion correlates 0.84\nwith same-day volume) but says nothing about forecasting: volume and speed for a\nfuture day are not known in advance. V1 remains available only as the labelled\nlegacy `/predict` endpoint and is not used for routing.",
+     "measured_on": "2022-01-01",
+     "content_hash": "a1ba0d49a345a659951143e567ab74515be75eefc452a930e37c2ed69ce18492",
+     "meta": {
+      "headings": [
+       "Track A — public daily dataset (research)"
+      ],
+      "source_ref": "docs/ML_PIPELINE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 4,
+     "heading_path": "Forecasting pipeline › Track B — collected TomTom observations (operational)",
+     "body": "* Target: speed ratio (current / free-flow) at each monitored point.\n* Grid: 30 min; horizons 30 / 60 / 120 min; lags 1, 2, 47 (≈1 day), 335 (1 week);\n  rolling 2 h and 24 h; time-of-day/day-of-week of the target.\n* Gate: ≥ 14 days of data before any evaluation; then the activation rule above.\n* Status (2026‑10‑22): **insufficient data** — 156 observations over 0.1 day. The\n  collector retries training daily; the first evaluation becomes possible after\n  ~2026‑11‑05 if collection runs continuously.\n* Serving: only an `active` model is used; forecasts are offered only for the\n  evaluated horizons (within one step); further-ahead requests return no forecast\n  rather than an extrapolation.\n* Pipeline mechanics (splits, leakage, baselines, registry, gating, serving) are\n  verified by `tests/test_forecasting.py` on clearly labelled synthetic fixtures;\n  those fixtures are never reported as results.",
+     "measured_on": "2026-10-22",
+     "content_hash": "21f537cf4e4879b4aa61f4eff290055dcf3ea0afaeda11402b95c89d8455a653",
+     "meta": {
+      "headings": [
+       "Track B — collected TomTom observations (operational)"
+      ],
+      "source_ref": "docs/ML_PIPELINE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 5,
+     "heading_path": "Forecasting pipeline › Prospective evaluation (M1, running)",
+     "body": "`forecasting/online.py` logs persistence, seasonal-naive and historical-average\nforecasts for every monitored point after each flow sweep and attaches the actual\nvalue once the target bucket has passed (`python -m forecasting.online report`,\n`GET /v1/admin/forecast/online`). Plan and definitions:\n[RESEARCH_MILESTONE_FORECASTING.md](RESEARCH_MILESTONE_FORECASTING.md).",
+     "measured_on": null,
+     "content_hash": "b39815f6d8337fa177136c1dc5c987b5a1657c4078ca13c20663f0f146725593",
+     "meta": {
+      "headings": [
+       "Prospective evaluation (M1, running)"
+      ],
+      "source_ref": "docs/ML_PIPELINE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 6,
+     "heading_path": "Forecasting pipeline › Graph neural networks",
+     "body": "Not built. A spatiotemporal GNN needs a dense sensor graph with weeks of\nhigh-frequency history. Available data: 16 roads with no topology and no temporal\nsignal (Track A), and 26 sparse sample points with hours of history (Track B).\nRevisit once Track B has several months of data and at least one evaluated\nnon-graph model to beat.",
+     "measured_on": null,
+     "content_hash": "600fb80d7f9bf7057990e235bdcb4be8a684f17b3e3353fc70fa358a12542a01",
+     "meta": {
+      "headings": [
+       "Graph neural networks"
+      ],
+      "source_ref": "docs/ML_PIPELINE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "doc",
+   "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
+   "title": "Results and limitations",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "dc85b6d4a2c9b61f81921b70842086c7733fb196a28bea51d7a0152480dc1c28",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Results and limitations",
+     "body": "Every number below was measured on this project's code and data on 22 October 2026.\nEvidence types are labelled: **[live]** observed on the running system with real\nproviders; **[test]** automated test; **[offline]** chronological evaluation on the\npublic dataset; **[prospective]** forecasts logged before the outcome was known.\nSynthetic test fixtures are never used as evidence here.",
+     "measured_on": "2026-10-22",
+     "content_hash": "194f0c19c6c73e655d097db7a327ac3bf0b0f0f5a7df4c5e29c8af0963b944b0",
+     "meta": {
+      "headings": [],
+      "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "Results and limitations › 1. What is completed versus validated",
+     "body": "| Area | Infrastructure | Validated result |\n|---|---|---|\n| Full-city routing (car, bicycle, walk; motorcycle on car graph) | complete | yes — 5 benchmark trips [test, live] |\n| Diverse alternatives + dedup | complete | yes [test, live] |\n| Traffic-timed comparison, shortcut/longcut labels | complete | yes — definitions tested exhaustively; live example below |\n| Data collection (flow, incidents, weather) | complete, running | yes — counts below [live] |\n| Offline forecasting pipeline (chronological, baselines, gate) | complete | yes, as a **negative result** on the public dataset [offline] |\n| Forecasting on own observations | pipeline + prospective logging complete | **no — insufficient data** |\n| Community verification | complete | mechanism tested [test]; no real submissions |\n| Auth / roles / security | complete | yes [test, live] |\n| Web app | complete | yes — browser walkthrough [live] |\n| Mobile app | builds (iOS bundle; Android release APK, signature verified) | **native app not run on a device**; the web app was verified on the owner's iPhone (Safari) and in emulated phone/tablet/desktop viewports |\n| Public deployment | free-tier configuration in the repository (Render API + database, Vercel web apps; [DEPLOY_FREE_TIER.md](DEPLOY_FREE_TIER.md)) | **no deployment verified**; no public URL recorded (status as of 3 Nov 2026) |",
+     "measured_on": "2026-11-03",
+     "content_hash": "2323817a65ebae0f6aab633b2e0801ef1d176b68f5031c609e621f698469ad06",
+     "meta": {
+      "headings": [
+       "1. What is completed versus validated"
+      ],
+      "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "Results and limitations › 2. Routing",
+     "body": "| Trip | Reference distance | Result |\n|---|---|---|\n| Whitefield → Marathahalli | 7.6 km | pass [test] |\n| Whitefield → Electronic City | 24.7 km | pass [test] |\n| Indiranagar → Yeshwanthpur | 14.7 km | pass [test] |\n| Airport (KIA) → Whitefield | 38.0 km | pass [test] |\n| Koramangala → Hebbal | 15.3 km | pass [test] |\n\n* Candidates: OSRM's native alternatives gave 0–2 per trip; the engine considered\n  10–13 candidates per request and returned up to 5 routes with pairwise geometric\n  similarity < 0.85 [test, live].\n* Mode realism (Indiranagar → Yeshwanthpur, free-flow): car 51 km/h, bicycle 14.1 km/h,\n  walk 5.0 km/h [live].\n* Avoid tolls: Electronic City → Kengeri via NICE Road 27.47 km / 22.7 min;\n  avoiding tolls 26.42 km / 31.6 min [live].\n* Traffic-aware labels [live, 22 Oct 2026, TomTom live traffic]: Whitefield → Electronic\n  City — **shortcut** 21.4 km / 66 min vs reference 24.7 km / 77 min; **longcut**\n  26.4 km / 71 min. Koramangala → Hebbal — reference 16.3 km at 62 min with 9.1 min\n  TomTom delay (free-flow 41.2 min, TomTom typical 58.2 min). These are single\n  observations at one moment; traffic changes, so labels on another day may differ.\n* Latency: 2–3 s per request with TomTom timing, 1.4–2.3 s without [live, local laptop].",
+     "measured_on": "2026-10-22",
+     "content_hash": "1ced1ef71b21a8f1c6606f3ce6603cea5c8143e9fbe79eeda03a6af0c8aff92b",
+     "meta": {
+      "headings": [
+       "2. Routing"
+      ],
+      "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "Results and limitations › 3. Data collected (own observations) [live]",
+     "body": "Collection started 22 Oct 2026 03:16 UTC.\n\nSnapshot queried 22 Oct 2026 08:37 UTC (collection continues; numbers grow every 30 min):\n\n| Data | Count | Notes |\n|---|---|---|\n| Traffic-flow observations | 312 | 26 points × 12 sweeps, 03:16–08:36 UTC (5.3 h); every sweep covered all 26 points |\n| Weather observations | 72 | 6 areas × 12 sweeps |\n| Incidents seen / active | 970 / 336 | TomTom incident sweeps (hourly) |\n| TomTom calls today | 351 | of the enforced 2,000/day budget (free tier 2,500) |\n\nRaw observations are private research data and are not included in the submission\n(TomTom storage terms unconfirmed).",
+     "measured_on": "2026-10-22",
+     "content_hash": "330c0c704b042e0b93f5bcff9b09198e5f6ead590101a596abb59907b1504b98",
+     "meta": {
+      "headings": [
+       "3. Data collected (own observations) [live]"
+      ],
+      "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 4,
+     "heading_path": "Results and limitations › 4. Forecasting › 4.1 Offline, public daily dataset [offline]",
+     "body": "Dataset: `backend/Banglore_traffic_Dataset.csv`, 8,936 rows, 16 roads, daily,\n2022‑01‑01 → 2024‑08‑09, provenance undocumented. Chronological split by target\ndate; test period 2024‑02‑01 → 2024‑08‑09.\n\n| Horizon | Candidate | Test MAE | Test RMSE | R² | n |\n|---|---|---|---|---|---|\n| 1 day | persistence | 20.217 | 29.124 | −0.541 | 1791 |\n| 1 day | seasonal naive | 19.737 | 28.529 | −0.478 | 1791 |\n| 1 day | **historical average** | **15.985** | **20.492** | 0.237 | 1791 |\n| 1 day | ridge (selected on validation) | 16.079 | 20.606 | 0.229 | 1791 |\n| 7 days | persistence / seasonal naive | 19.661 | 28.414 | −0.462 | 1774 |\n| 7 days | **historical average** | **16.008** | **20.528** | 0.237 | 1774 |\n| 7 days | ridge | 16.097 | 20.612 | 0.230 | 1774 |\n\n* **No model beat the historical-average baseline** (ridge 0.6 % worse); the model was\n  registered as *candidate*, not activated.\n* Why: lag-1 autocorrelation per road averages −0.008 (range −0.074…0.068),\n  day-of-week means differ by only 1.15 points, and 43.5 % of values sit at the cap\n  (100). Real traffic has strong daily/weekly structure; this dataset behaves like\n  random draws around road means, consistent with synthetic data.\n* V1's reported R² 0.96 reproduced only with **same-day** volume and speed as inputs\n  (chronological R² 0.962, MAE 2.98) — estimation, not forecasting. Without them:\n  R² 0.232, MAE 16.03.",
+     "measured_on": "2022-01-01",
+     "content_hash": "761201f1d019ebeb11307a5d3bc467f87dc3c3a647afd6b78db86f9904b8b0e4",
+     "meta": {
+      "headings": [
+       "4. Forecasting",
+       "4.1 Offline, public daily dataset [offline]"
+      ],
+      "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 5,
+     "heading_path": "Results and limitations › 4. Forecasting › 4.2 Own observations",
+     "body": "**Status: insufficient data — no forecasting claim is made.**\n\n* Offline evaluation (`python -m forecasting.pipeline segments`) refuses to run below\n  14 days of data; at 08:37 UTC the series spanned 5.3 hours.\n* Prospective logging (`forecasting/online.py`) started 07:58 UTC. Snapshot at 08:37 UTC:\n\n| Baseline | Horizon | Resolved (n) | MAE | RMSE | Bias | Pending |\n|---|---|---|---|---|---|---|\n| persistence | 30 min | 26 | 0.0479 | 0.0920 | −0.0265 | 52 |\n| persistence | 60 min | 0 | – | – | – | 78 |\n| persistence | 120 min | 0 | – | – | – | 78 |\n| seasonal naive / historical average | all | 0 | – | – | – | not logged: need ≥ 1 week of history |\n\nUnits: speed ratio (current ÷ free-flow, typically 0.2–1.0). The 26 resolved values\nare **one forecasting round at one time of day** at 26 points — far too few for any\nconclusion about accuracy, and with only one baseline available there is nothing to\ncompare against yet. They demonstrate that the prediction-versus-actual pipeline works\non real data, nothing more. Current figures: `docker compose exec collector python -m forecasting.online report`.",
+     "measured_on": null,
+     "content_hash": "b2d2c84e227d9dddcb5f41edcc9457a6c438855b493514aaff81b356c5801885",
+     "meta": {
+      "headings": [
+       "4. Forecasting",
+       "4.2 Own observations"
+      ],
+      "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 6,
+     "heading_path": "Results and limitations › 5. Limitations",
+     "body": "1. **Forecasting is not validated.** No model has beaten baselines; evaluation on own\n   data requires ≥ 14 days (≈ 5 Nov 2026 if collection is continuous).\n2. **Coverage:** traffic flow at 26 sample points only; one provider (TomTom).\n3. **Timestamps:** an observation's time is the collector's fetch time; TomTom flow\n   responses carry no measurement time.\n4. **Collection gaps:** the collector stops when the laptop/Docker stops; sweeps drift\n   ≈ 20 s per cycle, which can leave occasional 30-minute buckets without data\n   (counted as missing, never filled).\n5. **Public dataset quality:** provenance unknown, likely synthetic; results on it do not\n   transfer to real traffic.\n6. **Single-moment observations:** the live routing examples are not statistically\n   representative.\n7. **Motorcycle** uses the car graph; two-wheeler restrictions are not modelled.\n8. **Native mobile app** not launched on a device (App Store Expo Go lacks SDK 58; iOS builds need Apple signing). The web app works in iPhone Safari (verified by the owner).\n9. **No verified public deployment.** On 22 Oct 2026 external access was a temporary Cloudflare quick tunnel: its URL changes on every start, and it works only while the laptop, Docker services, internet connection and tunnel process keep running. Since then a free-tier configuration has been added (`render.yaml`, `frontend/vercel.json`, `frontend4admin/vercel.json`, [DEPLOY_FREE_TIER.md](DEPLOY_FREE_TIER.md)); it needs owner-created Render and Vercel accounts, and no deployment from it has been verified as of 3 Nov 2026. That setup would use the shared public OSRM servers, so it would offer fewer route alternatives than the local stack and no avoid options. CI passed on GitHub (22 Oct 2026; latest green run on `fac06c3`, 3 Nov 2026).\n10. **Terms:** TomTom storage terms unconfirmed — collected observations must not be published.",
+     "measured_on": "2026-11-05",
+     "content_hash": "5a8e5f8a205b86bc506a65b0deb90aa95c7b0f5bedcfeadfe7e90a7ca794a317",
+     "meta": {
+      "headings": [
+       "5. Limitations"
+      ],
+      "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 7,
+     "heading_path": "Results and limitations › 6. Next steps",
+     "body": "1. Keep the collector running continuously for ≥ 14 days (ideally 28).\n2. M2: per-point data-quality report (coverage, gaps) — after 7 days.\n3. M3/M4: paired prospective baseline comparison, then `python -m forecasting.pipeline segments`.\n4. M5: log a candidate model's forecasts prospectively for ≥ 7 days before allowing routing to use it.\n5. Deploy on a free VM; test the mobile app on an emulator or device.\nSee [RESEARCH_MILESTONE_FORECASTING.md](RESEARCH_MILESTONE_FORECASTING.md).",
+     "measured_on": null,
+     "content_hash": "1861493d81a6d6f229a57dcecfeb1fa0359f1d81d6328c9b6a854b4d07686955",
+     "meta": {
+      "headings": [
+       "6. Next steps"
+      ],
+      "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "doc",
+   "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
+   "title": "Research milestone: validated short-horizon forecasting",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "826de9515fb2448951ead93a2cdf8cabcde4e73d4dbb8e5f32e5a062b5d8fa78",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Research milestone: validated short-horizon forecasting",
+     "body": "_Status 2026‑10‑22: step M1 implemented and running; M2–M5 designed. No forecasting\naccuracy is claimed — there is not yet enough data to measure any._",
+     "measured_on": "2026-10-22",
+     "content_hash": "a021b6fcfe49e887f726adff0c0634a19ac91ce099dd49f5bc045107c84f29e7",
+     "meta": {
+      "headings": [],
+      "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "Research milestone: validated short-horizon forecasting › Question",
+     "body": "Can a model predict the speed ratio (current ÷ free-flow speed) at Bengaluru's\nmonitored road points 30, 60 and 120 minutes ahead **more accurately than simple\nbaselines**, measured on data that did not exist when the model was built?",
+     "measured_on": null,
+     "content_hash": "97946a7ca9e0889d562be17c5f7987ab8051bd35ee62483d939763815755ffff",
+     "meta": {
+      "headings": [
+       "Question"
+      ],
+      "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "Research milestone: validated short-horizon forecasting › Current state (inspected)",
+     "body": "| Component | State |\n|---|---|\n| Collection | 26 points every 30 min (TomTom flow), running since 2026‑10‑22 03:16 UTC |\n| Offline pipeline (`forecasting/pipeline.py`) | chronological split, 3 baselines, ridge/GBM, activation gate; refuses to run below 14 days |\n| Serving (`segment_model.py`) | only `active` models; only evaluated horizons |\n| Prospective logging (`forecasting/online.py`) | **new (M1)** — baselines logged every sweep; actuals attached afterwards |\n| Defects fixed during this audit | collector could not write models/reports (read-only dirs); API could not see collector-trained artifacts (unshared volume) |",
+     "measured_on": "2026-10-22",
+     "content_hash": "8d66af9ba6b24e529df7ca5f48292efbba74b9a99a40d9fbeef242d4f9bac509",
+     "meta": {
+      "headings": [
+       "Current state (inspected)"
+      ],
+      "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "Research milestone: validated short-horizon forecasting › Definitions",
+     "body": "* **Time grid** — 30-minute UTC buckets. An observation belongs to the bucket of its\n  `observed_at`, which is the collector's fetch time (TomTom flow responses carry no\n  measurement timestamp; documented limitation).\n* **Target** — mean speed ratio of a point's observations in the target bucket.\n  No interpolation; a bucket without observations has **no actual** and is counted\n  as missing.\n* **Forecast origin** — the bucket containing the forecast time; a point is\n  forecast only if observed in that bucket.\n* **Horizons** — 30, 60, 120 minutes (1, 2, 4 buckets).\n* **Information rule** — a forecast may use only observations with\n  `observed_at < made_at` (tested in `test_logging_ignores_observations_after_now`).\n* **Baselines** — persistence (origin value); seasonal naive (same bucket one week\n  before the target); historical average (mean of all earlier same weekday and\n  time-of-day buckets). A baseline without enough history is skipped, never\n  substituted.\n* **Errors** — MAE (primary), RMSE, bias (mean of prediction − actual), with n,\n  pending and missing counts. **Paired** comparison restricts all candidates to the\n  same (point, target, horizon) triples.",
+     "measured_on": null,
+     "content_hash": "3aeccd794eb77a59dd0ea4e62c4cce5d482f87490173625ecf06b968520bd4fb",
+     "meta": {
+      "headings": [
+       "Definitions"
+      ],
+      "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 4,
+     "heading_path": "Research milestone: validated short-horizon forecasting › Milestones",
+     "body": "| | Deliverable | Data needed | Exit criterion |\n|---|---|---|---|\n| **M1** ✅ | Prospective baseline logging + actuals + report (`python -m forecasting.online report`, `GET /v1/admin/forecast/online`) | — | running; 8 tests pass |\n| M2 | Data-quality report per point: coverage %, gaps, confidence, road class, sweep jitter | 7 days | ≥ 90 % bucket coverage on ≥ 20 points |\n| M3 | First baseline comparison: persistence vs seasonal naive vs historical average (paired, prospective) | 14 days (2 weekly samples) | report generated from logged predictions; no model yet |\n| M4 | Offline model evaluation with `forecasting.pipeline segments` (chronological; train < validation < test) | ≥ 14 days, target 28 days | model registered; activated only if test MAE ≥ 5 % below the best baseline on every horizon with ≥ 500 test samples |\n| M5 | **Prospective validation** of the candidate model: log its forecasts alongside the baselines for ≥ 7 further days; compare paired MAE on data collected after training | M4 + 7 days | activation in routing only if it also beats the best baseline prospectively |\n\nEarliest dates, if collection runs without interruption: M2 ≈ 2026‑10‑29,\nM3/M4 ≈ 2026‑11‑05, M5 ≈ 2026‑11‑12. These are calendar estimates, not results.",
+     "measured_on": "2026-10-29",
+     "content_hash": "51905d049c257dfdef93feb47456aa53f6d61a87189c67e795887fa9943b26b2",
+     "meta": {
+      "headings": [
+       "Milestones"
+      ],
+      "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 5,
+     "heading_path": "Research milestone: validated short-horizon forecasting › Next implementation steps (small, testable)",
+     "body": "1. **M2 data-quality report** — per-point bucket coverage and gap list from\n   `traffic_observations`; add to the admin freshness page.\n2. **Log model forecasts** — when a `candidate` model exists, log its predictions\n   through the same `PredictionRecord` path (registered under its own model version)\n   so it is compared with baselines on identical triples.\n3. **Prospective gate** — extend `predictor.active_model` so activation also requires\n   a prospective paired MAE improvement (M5), not only the offline test result.\n4. **Snapshot exports for the report** — export the aggregated error tables (not raw\n   TomTom observations) for the academic write-up.",
+     "measured_on": null,
+     "content_hash": "6290f6b651ec6feefd52bf66c654244223f71e6902c211a41974f06123a190fe",
+     "meta": {
+      "headings": [
+       "Next implementation steps (small, testable)"
+      ],
+      "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 6,
+     "heading_path": "Research milestone: validated short-horizon forecasting › Threats to validity",
+     "body": "* 26 sample points ≠ city-wide traffic; results describe those points only.\n* Fetch time ≠ measurement time; TomTom's own smoothing interval is unknown.\n* Collection gaps (laptop sleep, Docker stopped) remove buckets; reports count them.\n* One provider (TomTom); provider-side changes would shift the series.\n* Weather and incidents are not yet model features; add only after baselines are established.",
+     "measured_on": null,
+     "content_hash": "c8e6ede8d9dd9e8432aeb461f55fa5a9be5e406b97f9f5f37a21ea2cfda7e636",
+     "meta": {
+      "headings": [
+       "Threats to validity"
+      ],
+      "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 7,
+     "heading_path": "Research milestone: validated short-horizon forecasting › What must not happen",
+     "body": "* No accuracy claim before M4/M5 numbers exist.\n* No random splits, no interpolated targets, no use of observations after the forecast time.\n* No publication of raw TomTom observations until their terms are confirmed (see RELEASE_READINESS.md).",
+     "measured_on": null,
+     "content_hash": "99cb5b77281c316837f002531cb7cb525f30dc765af6001745e7933e6f6d3f65",
+     "meta": {
+      "headings": [
+       "What must not happen"
+      ],
+      "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "doc",
+   "source_ref": "docs/USER_GUIDE.md",
+   "title": "User guide",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "24a89bc6c845f3f42ae370a5b6b5fd148b5475a7c264423691fe11c066d97ae2",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "User guide",
+     "body": "Open the web app at **http://localhost:8080** (after `docker compose up -d`).\nEvery page starts behind the sign-in screen: you need an account to plan routes\nor view traffic (see [§4](#4-create-an-account-and-sign-in)). Once you are signed in,\nthe side bar has **Home**, **Navigate**, **Traffic**, **Insights**, **Journal**,\n**About**, **My account** and, for administrators only, **Admin**.",
+     "measured_on": null,
+     "content_hash": "8b983c4f28cfd8b89b7e7736aede817674dfebb25e5525fef1dd0baf9c61e3f6",
+     "meta": {
+      "headings": [],
+      "source_ref": "docs/USER_GUIDE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "User guide › 1. Plan a route (sign-in required)",
+     "body": "Sign in first (§4). The API refuses route requests without a signed-in account\n(`API_AUTH_REQUIRED=true`, the default in `docker-compose.yml` and `render.yaml`).\n\n1. **From**: type a place (e.g. `Koramangala`, `Phoenix Market City`,\n   `Indiranagar Metro`) and pick a suggestion with the mouse or ↑/↓ + Enter.\n   * Coordinates also work: `12.9352, 77.6245`.\n   * ◎ uses your current GPS location (the browser asks for permission).\n   * ⌖ then click on the map to pick a point.\n2. **To**: same as above. ⇅ swaps start and destination.\n3. **Travel mode**: Car, Motorcycle, Bicycle or Walk. A greyed-out mode means its\n   routing server is not running. Motorcycle shows a note: it uses the car road graph.\n4. **Preference**: Fastest, Shortest, Least traffic now, Least predicted traffic, or Balanced.\n5. **Avoid** (car/motorcycle): toll roads, expressways or ferries (one at a time).\n   Shown only when the routing servers support it; the free-tier deployment uses\n   public OSRM servers that do not, so the option is hidden there\n   ([DEPLOY_FREE_TIER.md](DEPLOY_FREE_TIER.md#free-tier-limits-you-will-notice)).\n6. **Departure**: *Leave now*, or *Leave at…* and choose a time up to 7 days ahead.\n7. Click **Find routes** (usually 2–3 seconds).",
+     "measured_on": null,
+     "content_hash": "19a225ec579719fcb6b01e77b4bf625c1a5e9a457bb9a8e7d9e226e13bd438c7",
+     "meta": {
+      "headings": [
+       "1. Plan a route (sign-in required)"
+      ],
+      "source_ref": "docs/USER_GUIDE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "User guide › 2. Read the results",
+     "body": "* **Recommendation box** — why the top route was chosen and the comparison basis:\n  * *Live traffic (TomTom)* — current traffic;\n  * *Predicted traffic (TomTom)* — TomTom's prediction for your departure time;\n  * *Free-flow estimate (OSRM)* — no traffic data; real times are usually longer\n    (a yellow warning says so).\n* **Route cards** — ETA, distance, badges:\n  * **Recommended**, **Reference** (the default route all others are compared with),\n  * **Shortcut** = shorter *and* faster than the reference,\n  * **Longcut** = longer *but* faster,\n  * **Alternative** = anything else.\n  * \"vs reference: +1.99 km, +1.4 min\" shows the exact differences.\n* Click a card (or its line on the map) to see **Why this route**: traffic delay,\n  free-flow and typical times, incidents *on* the route, monitored traffic points\n  near it, and **Show navigation steps**.\n* **Data sources for this result** (bottom) lists every source with its status\n  (ok / unavailable / not applicable).\n\nMap layers (checkboxes under the form): **Monitored traffic** (26 sample points,\ncoloured by congestion), **Incidents**, **Verified shortcuts**.",
+     "measured_on": null,
+     "content_hash": "30f0d198469a71bd2e1abe79db17de9fbf1ffac8bf9314899c219a24e7edcbeb",
+     "meta": {
+      "headings": [
+       "2. Read the results"
+      ],
+      "source_ref": "docs/USER_GUIDE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "User guide › 3. Traffic page",
+     "body": "Shows the latest observation for each monitored point (slowest first), how old it\nis, active incidents, weather by area, and whether Pulse forecasts are enabled\n(currently *Off* — no model has passed evaluation). Click a point for its\ncollected speed history. These are sample points, not city-wide coverage.",
+     "measured_on": null,
+     "content_hash": "407d283364d31870dd4e1b99e25dd86942bfaacd10355d0831e12eeb02dadc27",
+     "meta": {
+      "headings": [
+       "3. Traffic page"
+      ],
+      "source_ref": "docs/USER_GUIDE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 4,
+     "heading_path": "User guide › 4. Create an account and sign in",
+     "body": "The sign-in screen appears whenever you are signed out. Choose *New here? Create an\naccount*. Password: at least 10 characters with upper- and lower-case letters and a\ndigit.\n\nHow sign-in works depends on how the server is configured\n([AUTHENTICATION.md](AUTHENTICATION.md)):\n\n* **Firebase sign-in** (when the server has `FIREBASE_PROJECT_ID` set): e-mail and\n  password or *Continue with Google*. You must verify your e-mail address before the\n  app lets you in; *Forgot password?* sends a reset link.\n* **Built-in accounts** (no Firebase configured, `LEGACY_AUTH_ENABLED=true`): e-mail\n  and password only. There is no e-mail verification and no password reset.\n\nSigned in, you can plan routes and view traffic (§1–§3), and also:\n\n* tick **Save to my trip history** before *Find routes*;\n* **My account → Trip history**: view or delete saved trips;\n* **Favourites**: save places by label and coordinates;\n* **Share a route**: record a trip with GPS or upload a GPX/JSON file and submit\n  it. It is map-matched and compared with the standard route. A shortcut becomes\n  public only after **3 independent users** confirm it **and** an administrator verifies it;\n* **Report incident**: reports stay hidden until an administrator publishes them;\n* **Profile**: change name or password, or delete your account and all personal data.",
+     "measured_on": null,
+     "content_hash": "e61899357ddd3fb282acd276be05ebb0a18bf0c9313540071305a4f350d69168",
+     "meta": {
+      "headings": [
+       "4. Create an account and sign in"
+      ],
+      "source_ref": "docs/USER_GUIDE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 5,
+     "heading_path": "User guide › 5. Administrators",
+     "body": "Create the first administrator from the command line\n(`docker compose exec backend python -m auth.bootstrap --email … --name …`).\nThe **Admin** page provides:\n\n* **System health** — database, the three routing servers, TomTom usage today, data freshness;\n* **Data freshness** — monitored points fresh/stale, observation counts, provider calls;\n* **Moderation** — shortcut candidates (verify / reject / mark stale) and pending incident reports;\n* **Models & metrics** — registered models with their measured test errors;\n* **Users** — promote/demote or disable accounts (not your own; the last admin is protected);\n* **Audit log** — administrative and security actions.\n\nForecast logging results (prediction vs actual) are available to administrators at\n`GET /api/v1/admin/forecast/online` (via http://localhost:8080) or\n`http://localhost:8000/v1/admin/forecast/online` with an admin token.",
+     "measured_on": null,
+     "content_hash": "810a6507541512c2bd7ca3304b23b7c54127eb3c98ecc44d08cec911a13b10de",
+     "meta": {
+      "headings": [
+       "5. Administrators"
+      ],
+      "source_ref": "docs/USER_GUIDE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 6,
+     "heading_path": "User guide › 6. On phones, tablets and other computers",
+     "body": "**Any device with a modern browser** (Android, iPhone, iPad, Windows, macOS, Linux):\nopen the address the system owner gives you, either the same-Wi-Fi address\n(e.g. `http://192.168.1.7:8080`) or the HTTPS address. The layout adapts to phone,\ntablet and desktop screens. On a phone you can add it to the home screen:\nSafari → Share → *Add to Home Screen*, or Chrome → ⋮ → *Add to Home screen*.\n\n**Android app (APK)**: install the provided `.apk` (you may need to allow installing apps\nfrom your browser or file manager). The app opens on its sign-in screen, which also has\nthe **Server** setting (later under **Account → Server**). Enter the HTTPS address\nyou were given (for example `https://<name>.trycloudflare.com`), tap **Test and save**,\nthen sign in. The app offers Navigate, Traffic and Account (sign-in, trip history, GPS trip recording,\nincident reports) on the same backend as the website.\n\n**iPhone/iPad app**: not yet installable. App Store Expo Go does not support SDK 58 yet,\nand a signed iOS build needs a paid Apple Developer account. Use the website in Safari,\nwhich works on the iPhone. Details: [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md#9-mobile-app).",
+     "measured_on": null,
+     "content_hash": "deb59313c41c52ee715f9574aa85396adf4e8a9cf9cf1713398ad9451acab9d1",
+     "meta": {
+      "headings": [
+       "6. On phones, tablets and other computers"
+      ],
+      "source_ref": "docs/USER_GUIDE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "doc",
+   "source_ref": "docs/SECURITY.md",
+   "title": "Security",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "10bc39f8a4c5746f6e370f4661622c02cebd3e1575a0ff81d75c0cb5fcb9fb64",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Security › Authentication",
+     "body": "* Two sign-in paths ([AUTHENTICATION.md](AUTHENTICATION.md)): **Firebase ID tokens**\n  (when `FIREBASE_PROJECT_ID` is set; verified e-mail required, otherwise\n  `403 email_not_verified`) and **built-in accounts** (HS256 JWTs from `/v1/auth/login`,\n  accepted while `LEGACY_AUTH_ENABLED=true`). The points below on passwords, sessions and\n  login limits describe the built-in path; Firebase handles its own passwords.\n* Passwords: bcrypt (cost 12); policy ≥ 10 chars, upper + lower case, digit, ≤ 72 bytes.\n  Admin bootstrap requires ≥ 14 chars.\n* Sessions: HS256 JWT bearer tokens (60 min) with `jti`, `iat`, `exp`, issuer.\n  Logout stores the `jti` in `revoked_tokens`; revoked/expired/forged tokens → 401.\n* Production refuses to start without `JWT_SECRET` (≥ 32 chars) or with wildcard CORS.\n* Login: generic \"incorrect e-mail or password\"; a dummy bcrypt check equalises timing\n  for unknown e-mails; sliding-window rate limit (5 failures / 5 min per e-mail and per IP → 429).\n* Tokens are sent as `Authorization: Bearer` (not cookies), so CSRF does not apply;\n  CORS `allow_credentials=False`, explicit origins only.",
+     "measured_on": null,
+     "content_hash": "cd1a9b4641408d42234163c1f5b306aae6177d5dcdae149e754ee91b1f8865c2",
+     "meta": {
+      "headings": [
+       "Authentication"
+      ],
+      "source_ref": "docs/SECURITY.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "Security › Authorization (enforced in the backend)",
+     "body": "The role is **read from the database on every request**, never from token claims,\nso demotion or deactivation takes effect immediately (tested).\n\nApplication endpoints are guarded by `app_access` (`backend/main.py`). With\n`API_AUTH_REQUIRED=true`, the default in `core/settings.py`, `docker-compose.yml` and\n`render.yaml`, anonymous requests get `401`; only `/health`, `/health/ready` and the\nsign-in endpoints under `/v1/auth/*` are public (tested:\n`tests/test_firebase_auth.py::test_health_is_public_but_app_endpoints_need_sign_in`).\nThe web and mobile apps show only the sign-in screen until a user is signed in.\n`API_AUTH_REQUIRED=false` restores anonymous access to the first row below; it is meant\nfor local development and is what most unit tests use (`tests/conftest.py`).\n\n| Capability | Anonymous | User | Admin |\n|---|---|---|---|\n| Plan routes, search places, view traffic/incidents/weather, view verified shortcuts | – (only with `API_AUTH_REQUIRED=false`) | ✓ | ✓ |\n| Save trips, favourites, own trip history | – | own only | own only |\n| Submit community routes / incident reports | – | ✓ (rate-limited) | ✓ |\n| Moderate submissions and incident reports | – | – | ✓ |\n| Manage users (role, active) | – | – | ✓ (not self; never the last admin) |\n| Data freshness, model metrics, system health, audit log | – | – | ✓ |\n\n* No self-promotion: registration and profile schemas have no role/active fields;\n  extra fields are ignored (tested). Admins cannot change their own role or status;\n  the last active admin cannot be demoted, disabled or self-deleted.\n* No IDOR: personal queries filter by `user_id = caller`; other users' ids return 404.\n* Shortcuts are never auto-verified: verification requires state `under_review`\n  (≥ 3 independent users + consistency checks) **and** an admin decision.\n* Initial admin: `python -m auth.bootstrap --email … ` reads the password from\n  `BOOTSTRAP_ADMIN_PASSWORD` or an interactive prompt (never a CLI argument);\n  refuses if an admin exists unless `--force`; audited.",
+     "measured_on": null,
+     "content_hash": "70869857aa4a57f64351c9f88ee8253abfbe08f34b197d01db44c5703249fe3f",
+     "meta": {
+      "headings": [
+       "Authorization (enforced in the backend)"
+      ],
+      "source_ref": "docs/SECURITY.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "Security › Secrets",
+     "body": "* All secrets via environment (`SecretStr` in settings; never in repr/logs).\n  `.env` files are gitignored; `git ls-files` shows no secret files.\n* **Key-leak fix:** V1 returned `requests` exception text, which contains the full\n  URL including `?key=<TomTom key>`, to API clients. Now provider errors carry only\n  safe messages; a logging filter redacts `key=`, `token=`, bearer headers and\n  password fields from every log record and traceback; `httpx` URL logging is\n  silenced. Verified by tests and live: a run with an invalid key logged it 0 times.\n* Local development credentials (dev admin and test user) exist only as comments in\n  the gitignored `backend/.env`.",
+     "measured_on": null,
+     "content_hash": "d6392380baa78664eace43f0fbacaf725ee892f873a1d391267d7e5da64bbbca",
+     "meta": {
+      "headings": [
+       "Secrets"
+      ],
+      "source_ref": "docs/SECURITY.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "Security › Transport and headers",
+     "body": "* Production: Caddy with automatic HTTPS, HSTS, `nosniff`, `Referrer-Policy: no-referrer`,\n  `Permissions-Policy` limiting geolocation to self. Only ports 80/443 are published;\n  Postgres, OSRM, backend and frontend are internal to the Docker network.\n* API adds `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options: DENY`, request ids.",
+     "measured_on": null,
+     "content_hash": "36960378de2634f3c9866b4648c66b2985370f5fae17bce254fb2dc64d0416de",
+     "meta": {
+      "headings": [
+       "Transport and headers"
+      ],
+      "source_ref": "docs/SECURITY.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 4,
+     "heading_path": "Security › Input handling and abuse limits",
+     "body": "* Pydantic validation on every body/query; bounded sizes (traces ≤ 5,000 points,\n  notes ≤ 500 chars, queries ≤ 120 chars, ≤ 1 avoid option, departures ≤ 7 days ahead).\n* Per-user limits: 20 route submissions/day, 10 incident reports/hour, 50 favourites.\n* SQL via the ORM / bound parameters only.\n* The mobile map loads Leaflet with Subresource Integrity hashes (verified against npm).\n* Mobile tokens are stored in the OS keystore (expo-secure-store); the web stores the\n  token in `localStorage` (XSS risk mitigated by React escaping and no `dangerouslySetInnerHTML`).",
+     "measured_on": null,
+     "content_hash": "356a6ad2116307543c341dbb3e74361f71221ac965a427978da009a42a732c58",
+     "meta": {
+      "headings": [
+       "Input handling and abuse limits"
+      ],
+      "source_ref": "docs/SECURITY.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 5,
+     "heading_path": "Security › Known gaps (not implemented)",
+     "body": "* Built-in accounts have no e-mail verification or password-reset flow (needs an e-mail\n  provider). With Firebase configured, both are handled by Firebase Authentication.\n* No refresh tokens for built-in accounts; users sign in again after 60 minutes.\n* The login rate limiter is in-process; behind several API replicas it should move to the database/Redis.\n* No CSP header yet on the web app (Leaflet tiles and inline styles need a tuned policy).\n* Dependency vulnerability scanning is not part of CI yet (`npm audit`/`pip-audit` recommended).",
+     "measured_on": null,
+     "content_hash": "eb9907a394c4f7250c7b30ef19b87d89071e91162b04d3d666371543b01c0251",
+     "meta": {
+      "headings": [
+       "Known gaps (not implemented)"
+      ],
+      "source_ref": "docs/SECURITY.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "doc",
+   "source_ref": "docs/DATABASE.md",
+   "title": "Database",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "dc23fd2c051fd0b292b7e5e14634dd5e8dbbdb46fd1ae03b8066db567b950b2a",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Database",
+     "body": "PostgreSQL 16 + PostGIS 3.4 (`postgis/postgis:16-3.4`) in all deployed\nenvironments; SQLite only for unit tests and zero-dependency development.\nORM: SQLAlchemy 2 (`backend/db/models.py`). Migrations: Alembic (`backend/migrations/`).",
+     "measured_on": null,
+     "content_hash": "479b7637a083c04be2b7116e989409214418e990e95627fea1cf8afdd9261b6e",
+     "meta": {
+      "headings": [],
+      "source_ref": "docs/DATABASE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "Database › Tables",
+     "body": "| Table | Purpose | Owner / privacy |\n|---|---|---|\n| users | accounts (email, bcrypt hash, role user/admin, active) | personal |\n| revoked_tokens | logged-out JWT ids until expiry | security |\n| audit_log | admin and security-relevant actions | ops |\n| favourite_places | user's saved places | personal, user-deletable |\n| trips | route searches the user chose to save (metrics summary, no GPS trace) | personal, user-deletable, 180-day retention |\n| traffic_segments | monitored points + latest provider geometry/road class | public data |\n| traffic_observations | flow observations (unique per segment/minute/source) | provider data (private research use) |\n| weather_observations | Open-Meteo observations (unique per area/minute/source) | public data |\n| incidents | TomTom + community incidents (unique per source/external id) | community reports moderated |\n| provider_calls | every quota-limited call (budget + freshness) | ops, 90-day retention |\n| places | OSM gazetteer (68,761 rows) | ODbL |\n| route_submissions | community GPS traces + validation results | personal; raw trace purged after 90 days |\n| shortcut_candidates | shortcut lifecycle (candidate → under_review → verified/rejected/stale) | derived |\n| model_versions / evaluation_records / prediction_records | ML registry and metrics | research |\n| legacy_predictions | V1 `/predict` history | legacy |",
+     "measured_on": null,
+     "content_hash": "2adf67a69079eca7a873fe193203eda2ed0d994d5e04213af3f8158de2b0f9dc",
+     "meta": {
+      "headings": [
+       "Tables"
+      ],
+      "source_ref": "docs/DATABASE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "Database › Spatial and time indexes",
+     "body": "Migration `0001` adds on PostgreSQL only:\n\n* `geog geography(Point,4326)` **generated** columns (from lat/lon) with GiST indexes\n  on traffic_segments, weather_observations, incidents, places, favourite_places,\n  shortcut_candidates (origin).\n* `pg_trgm` GIN index on `places.name_normalized` for fuzzy place search.\n* B-tree indexes on all timestamp columns used for range queries\n  (observed_at, last_seen_at, created_at, called_at, submitted_at) and on\n  (segment_id, observed_at).\n\nMigration `0002` adds `evaluation_records.candidate`.\n\nVerified: `upgrade head → check → downgrade base → upgrade head` on a fresh PostGIS\ndatabase (`tests/test_integration_live.py::test_alembic_migrations_on_fresh_postgis_database`);\n`alembic check` reports no drift between models and schema.",
+     "measured_on": null,
+     "content_hash": "fd719209e388a7e421a1e434232c7c5bfb0d3dfaab405ba84fa2507035a025b0",
+     "meta": {
+      "headings": [
+       "Spatial and time indexes"
+      ],
+      "source_ref": "docs/DATABASE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "Database › Retention and privacy (daily job, `traffic/maintenance.py`)",
+     "body": "| Data | Retention |\n|---|---|\n| traffic/weather observations | 730 days (`RETENTION_OBSERVATION_DAYS`) |\n| trips | 180 days (`RETENTION_TRIP_DAYS`) |\n| raw GPS traces in submissions | 90 days (`RETENTION_SUBMISSION_TRACE_DAYS`); matched geometry kept |\n| revoked tokens | until token expiry |\n| provider call log | 90 days |\n\nUsers can delete individual trips, all trips, favourites, or their whole account\n(`POST /v1/auth/me/delete`, cascades to personal rows). Every query for personal\ndata is filtered by the authenticated user id.",
+     "measured_on": null,
+     "content_hash": "fee87f1e3b3f4fcc08def604f3a0c3cc77100f12eef807f203b0f59eef1212ce",
+     "meta": {
+      "headings": [
+       "Retention and privacy (daily job, `traffic/maintenance.py`)"
+      ],
+      "source_ref": "docs/DATABASE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 4,
+     "heading_path": "Database › Persistence",
+     "body": "Data lives in the named volume `bp_pgdata`. Verified: user, trip, observation and\nplace counts were identical before and after `docker compose restart postgres backend`.\nBackups (recommended for the VM): `docker compose exec postgres pg_dump -U pulse -Fc pulse > backup.dump`\non a cron schedule; restore with `pg_restore`.",
+     "measured_on": null,
+     "content_hash": "c192fac7d0518e2e1438c8f50ace0b6a4ac379dc7b909bb3110d493f6f7bec14",
+     "meta": {
+      "headings": [
+       "Persistence"
+      ],
+      "source_ref": "docs/DATABASE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 5,
+     "heading_path": "Database › Rebuilding the gazetteer",
+     "body": "```bash\ndocker compose exec backend python -m geocoding.gazetteer /path/in/container/bengaluru.osm.pbf\n```\n\nUses PostgreSQL `COPY` (68,761 places loaded in ~5 s after a ~35 s extraction).",
+     "measured_on": null,
+     "content_hash": "891b0e2582edb5137f16d64e56cf9ec32d16cd3cbcb8a67d01397313a6ba9777",
+     "meta": {
+      "headings": [
+       "Rebuilding the gazetteer"
+      ],
+      "source_ref": "docs/DATABASE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "doc",
+   "source_ref": "docs/ARCHITECTURE.md",
+   "title": "Architecture",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "4f127f80e98f09cae6ec944a3355dd8c014d3e014d0892df991a25f646a64733",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Architecture › System overview",
+     "body": "```mermaid\nflowchart LR\n  subgraph Clients\n    W[React web app<br/>CRA + react-leaflet]\n    M[Expo mobile app<br/>RN + Leaflet WebView]\n  end\n  subgraph Edge\n    C[Caddy<br/>HTTPS, prod only]\n    N[nginx<br/>static build + /api proxy]\n  end\n  subgraph API[\"FastAPI backend (uvicorn)\"]\n    R[routing.engine]\n    G[geocoding.service]\n    A[auth + RBAC]\n    CM[community.service]\n    F[forecasting.predictor]\n    H[health]\n  end\n  subgraph Data\n    PG[(PostgreSQL 16 + PostGIS 3.4)]\n    O1[OSRM car.lua]\n    O2[OSRM foot.lua]\n    O3[OSRM bicycle.lua]\n  end\n  COL[collector process<br/>traffic.collector]\n  TT[(TomTom APIs)]\n  OM[(Open-Meteo)]\n  PH[(Photon, fallback)]\n\n  W --> C --> N --> API\n  M --> C\n  R --> O1 & O2 & O3\n  R -->|route timing| TT\n  R --> PG\n  G --> PG\n  G -.-> PH\n  A --> PG\n  CM --> O1 & O2 & O3\n  CM --> PG\n  F --> PG\n  COL -->|flow, incidents| TT\n  COL -->|weather| OM\n  COL --> PG\n```",
+     "measured_on": null,
+     "content_hash": "9b7e273a689ed11aac841da5f8a8140cf89ed0e6ce75f9d319bbf7aac95d4575",
+     "meta": {
+      "headings": [
+       "System overview"
+      ],
+      "source_ref": "docs/ARCHITECTURE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "Architecture › Components",
+     "body": "| Component | Code | Responsibility |\n|---|---|---|\n| API app | `backend/main.py` | App factory, CORS, security headers, error envelope, routers |\n| Configuration | `backend/core/settings.py` | Typed settings from env/.env; secrets as `SecretStr`; production validation |\n| Logging/errors | `core/log_config.py`, `core/errors.py` | Key redaction in all log records; stable `{\"error\":{code,message,request_id}}` |\n| Database | `db/models.py`, `db/session.py`, `migrations/` | SQLAlchemy 2 ORM, Alembic migrations, PostGIS generated geography columns |\n| Routing | `routing/engine.py` + `geometry.py`, `classification.py`, `scoring.py`, `osrm_client.py`, `route_profiles.py` | Candidate generation, dedup, traffic timing, evidence, ranking, classification, explanations |\n| Geocoding | `geocoding/gazetteer.py`, `service.py`, `text.py` | OSM gazetteer build; search, coordinate parsing, reverse geocoding |\n| Providers | `providers/tomtom.py`, `openmeteo.py`, `quota.py` | Validated provider clients; DB-backed daily TomTom budget |\n| Ingestion | `traffic/collector.py`, `ingest.py`, `state_engine.py`, `maintenance.py` | Scheduled collection, dedup, staleness, retention, daily retrain attempt |\n| Weather | `weather/service.py` | Stored or live current weather, hourly forecast for future departures |\n| Forecasting | `forecasting/pipeline.py`, `segment_model.py`, `predictor.py` | Chronological evaluation pipeline, registry, gated activation, serving |\n| Community | `community/service.py` | GPS validation, map matching, comparison, candidate lifecycle |\n| Auth | `auth/security.py`, `auth/bootstrap.py`, `api/deps.py` | bcrypt, JWT with revocation, rate limit, role checks, admin bootstrap |\n| Web | `frontend/src/` | Navigate, Traffic, Account, Admin pages |\n| Mobile | `mobile/` | Navigate, Traffic, Account screens on the same API |",
+     "measured_on": null,
+     "content_hash": "ae1e20e185c266d3c9075d3dc916279450e54edad698301579c843e0c312176b",
+     "meta": {
+      "headings": [
+       "Components"
+      ],
+      "source_ref": "docs/ARCHITECTURE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "Architecture › Request lifecycle: `POST /v1/routes`",
+     "body": "0. `app_access` resolves the signed-in user; without one the request gets `401` (`API_AUTH_REQUIRED=true`, the default).\n1. Validate the body (`RouteRequestV2`); resolve the vehicle → OSRM server for that profile (503 `mode_unavailable` if absent; never substituted).\n2. OSRM primary route (+ native alternatives) = **reference route**.\n3. Up to 10 corridor via-point routes, 5 at a time (defaults; `OSRM_CORRIDOR_MAX`, `OSRM_MAX_CONCURRENCY`), snapped by OSRM.\n4. Filter: detour limits, U-turn spurs; geometric dedup (symmetric overlap ≥ 0.85).\n5. TomTom timing per candidate (supportingPoints; departAt for future); reject if length differs > 8 %.\n6. Evidence: incidents *on* the route, monitored-point observations (+ forecast if an evaluated model is active), weather at departure.\n7. Rank on one comparison basis; classify vs reference; generate explanations; optionally save the trip.",
+     "measured_on": null,
+     "content_hash": "f6017419cd6b18493ed11e5836a37115f43fdd63f5089aa9d88b713c3ded5cc5",
+     "meta": {
+      "headings": [
+       "Request lifecycle: `POST /v1/routes`"
+      ],
+      "source_ref": "docs/ARCHITECTURE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "Architecture › Processes and deployment units",
+     "body": "| Unit | Image | Notes |\n|---|---|---|\n| `backend` | `backend/Dockerfile` (python:3.12-slim) | Runs `alembic upgrade head` then uvicorn |\n| `collector` | same image | `python -m traffic.collector`; resumes its schedule after restarts |\n| `osrm-car/foot/bicycle` | `ghcr.io/project-osrm/osrm-backend` | Pre-built MLD graphs mounted read-only (~300 MB RAM each measured) |\n| `postgres` | `postgis/postgis:16-3.4` | Named volume `bp_pgdata` |\n| `frontend` | `frontend/Dockerfile` (node build → nginx) | `/api/*` proxied to backend |\n| `caddy` | `caddy:2.8-alpine` (prod overlay) | Automatic HTTPS; the only public ports (80/443) |\n\nSee [ROUTING.md](ROUTING.md), [TRAFFIC.md](TRAFFIC.md), [ML_PIPELINE.md](ML_PIPELINE.md),\n[DATABASE.md](DATABASE.md), [SECURITY.md](SECURITY.md), [DEPLOYMENT.md](DEPLOYMENT.md).",
+     "measured_on": null,
+     "content_hash": "d13eaae9890975f7c2e84c1dad7e78cedfba6df71c89035e8d0d0847b97dc76f",
+     "meta": {
+      "headings": [
+       "Processes and deployment units"
+      ],
+      "source_ref": "docs/ARCHITECTURE.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "doc",
+   "source_ref": "docs/DEPLOY_FREE_TIER.md",
+   "title": "Free-tier deployment: Render (API + database) and Vercel (web apps)",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "9baa591e8581699bceabad5f63fabb5c47676bd2961bef0654b3e7e9d4d54c65",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Free-tier deployment: Render (API + database) and Vercel (web apps)",
+     "body": "This is the ₹0 path. It needs accounts that only the project owner can create, so every\nstep below is done by hand in the providers' dashboards. Nothing here is verified until\nyou open the deployed URLs and the checks at the end pass.\n\n| Piece | Host | Plan | Config in repo |\n|---|---|---|---|\n| FastAPI backend | Render web service (Docker) | Free | `render.yaml` |\n| PostgreSQL 16 + PostGIS | Render Postgres | Free | `render.yaml` |\n| Commuter web app | Vercel | Hobby (free) | `frontend/vercel.json` |\n| Admin dashboard | Vercel (second project) | Hobby (free) | `frontend4admin/vercel.json` |\n| Traffic collector | GitHub Actions schedule | Free (public repo) | `.github/workflows/collector.yml` |\n| Routing | Public FOSSGIS OSRM servers | Free, fair use | env vars in `render.yaml` |\n| Sign-in | Firebase Authentication (optional) | Spark (free) | env vars |\n| Live traffic | TomTom (optional) | Free tier, 2,500 calls/day | env var |",
+     "measured_on": null,
+     "content_hash": "ff40908d5c94c842495ee209e31243adad942f412f71daa78a61120fb7101a97",
+     "meta": {
+      "headings": [],
+      "source_ref": "docs/DEPLOY_FREE_TIER.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "Free-tier deployment: Render (API + database) and Vercel (web apps) › Free-tier limits you will notice",
+     "body": "- **Cold starts.** A free Render web service sleeps after about 15 minutes without traffic.\n  The next request wakes it, which takes around a minute. The web app shows a loading or\n  error state until then.\n- **Database expiry.** Render's free Postgres expires 30 days after creation (Render emails\n  before deleting it). To keep data, upgrade it, or move to a free PostGIS-capable host such\n  as Neon or Supabase and set `DATABASE_URL` on the web service to that URL instead.\n- **512 MB RAM** for the API. The app loads scikit-learn and pandas at startup. Watch\n  the Render metrics after the first deploy.\n- **Routing.** OSRM needs a pre-built Bengaluru graph and more memory than any free web\n  plan offers, so the API uses the public servers at `routing.openstreetmap.de` (car, foot,\n  bike). These are shared and rate-limited, so `render.yaml` caps each route request at\n  1 + 4 OSRM calls, made one at a time. That gives fewer alternative routes than the full\n  stack, which makes up to 11 calls per route. These servers do not support OSRM `exclude`,\n  so the \"avoid tolls/motorways/ferries\" options are hidden (`OSRM_EXCLUDE_SUPPORTED=false`).\n  If you send too many requests, the servers block you temporarily, and routing returns\n  \"routing engine unavailable\" until the block lifts. To get full routing back, run your own\n  OSRM (`docker-compose.yml`, `infrastructure/osrm/`) on any host and point `OSRM_URL`,\n  `OSRM_FOOT_URL` and `OSRM_BICYCLE_URL` at it.\n- **No always-on collector.** Render's background workers and cron jobs are paid. The\n  collector runs as a GitHub Actions job every 30 minutes (`--once` sweeps). GitHub can delay\n  scheduled runs, and it pauses schedules after 60 days without repository activity. The daily\n  model retrain that the compose collector did is not part of this path.",
+     "measured_on": null,
+     "content_hash": "faadad98a5f127588cf0a43cfa5946b3d4ee3555044d9652a6c99bc91c3922d2",
+     "meta": {
+      "headings": [
+       "Free-tier limits you will notice"
+      ],
+      "source_ref": "docs/DEPLOY_FREE_TIER.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "Free-tier deployment: Render (API + database) and Vercel (web apps) › 1. Push the code",
+     "body": "Render and Vercel deploy from GitHub. Push branch `v2-build`, and merge it into `main` if you\nwant `main` to be what's deployed. In each dashboard, pick the branch you pushed.",
+     "measured_on": null,
+     "content_hash": "dd82d621ed55bea167308235e1e980fbbfdffee1f71020834326fb1d2b9f9839",
+     "meta": {
+      "headings": [
+       "1. Push the code"
+      ],
+      "source_ref": "docs/DEPLOY_FREE_TIER.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "Free-tier deployment: Render (API + database) and Vercel (web apps) › 2. Backend and database on Render",
+     "body": "1. Sign in at https://dashboard.render.com with GitHub, and give Render access to\n   `bengaluru-pulse-lite`.\n2. **New → Blueprint**, choose the repository and branch. Render reads `render.yaml` and\n   proposes `bengaluru-pulse-api` (web, free) and `bengaluru-pulse-db` (Postgres, free) in\n   Singapore.\n3. Fill in the values Render asks for:\n   - `CORS_ORIGINS`: your Vercel URLs, comma-separated. You don't know them yet, so put\n     `http://localhost:3000` for now and update it in step 4.\n   - `CORS_ORIGIN_REGEX`: optional, to allow Vercel preview URLs, for example\n     `^https://bengaluru-pulse(-[a-z0-9-]+)?\\.vercel\\.app$`. Leave it empty to allow only the\n     listed origins.\n   - `TOMTOM_API_KEY`: optional (https://developer.tomtom.com, free key). Empty means no live\n     traffic.\n   - `FIREBASE_PROJECT_ID`: optional. Empty means built-in email/password sign-in only.\n4. **Apply.** The first build takes several minutes. On start, the container runs\n   `alembic upgrade head`, which creates the PostGIS and pg_trgm extensions and the\n   tables, then serves on Render's `$PORT`.\n5. Note the service URL, for example `https://bengaluru-pulse-api.onrender.com`, and check\n   `https://<api>/health` (should return `{\"status\":\"ok\",...}`) and `https://<api>/health/ready`.\n6. `JWT_SECRET` is generated by Render. Keep it stable: changing it signs everyone out.",
+     "measured_on": null,
+     "content_hash": "d6cdde65ec9a275c0980bf145ade1c8623fb5b3c787440f8e76ff6c760f54a5a",
+     "meta": {
+      "headings": [
+       "2. Backend and database on Render"
+      ],
+      "source_ref": "docs/DEPLOY_FREE_TIER.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 4,
+     "heading_path": "Free-tier deployment: Render (API + database) and Vercel (web apps) › 2. Backend and database on Render › Create the first admin",
+     "body": "Sign up through the web app, then promote that account. Render's free plan has no Shell,\nso run this from your PC (in `backend/`, with the project venv) against the **External\nDatabase URL** from the Render database page:\n\n```\ncd backend\nset DATABASE_URL=<External Database URL>      (PowerShell: $env:DATABASE_URL=\"<...>\")\npython -m auth.bootstrap --email <you@domain> --promote\n```",
+     "measured_on": null,
+     "content_hash": "eb256e53bae33de8b5c6687b7351fe947c28895fa7a5963fe222f01efed37f3c",
+     "meta": {
+      "headings": [
+       "2. Backend and database on Render",
+       "Create the first admin"
+      ],
+      "source_ref": "docs/DEPLOY_FREE_TIER.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 5,
+     "heading_path": "Free-tier deployment: Render (API + database) and Vercel (web apps) › 3. Web apps on Vercel",
+     "body": "Do this twice, once per app.\n\n1. https://vercel.com → **Add New → Project** → import `bengaluru-pulse-lite`.\n2. **Root Directory**: `frontend` (commuter app) or `frontend4admin` (admin dashboard).\n   Vercel reads `vercel.json` in that folder (Create React App, SPA fallback).\n3. **Environment Variables** (Production and Preview):\n   - `REACT_APP_API_BASE_URL` = your Render URL, with no trailing slash and no `/api`. The\n     build fails on purpose if this is missing.\n   - Optional Firebase web config: `REACT_APP_FIREBASE_API_KEY`,\n     `REACT_APP_FIREBASE_AUTH_DOMAIN`, `REACT_APP_FIREBASE_PROJECT_ID`,\n     `REACT_APP_FIREBASE_APP_ID` (public identifiers, not secrets).\n4. Deploy, and note the URL (for example `https://bengaluru-pulse.vercel.app`).\n5. These variables are baked in at build time, so change them and then **Redeploy**.",
+     "measured_on": null,
+     "content_hash": "5f73736dab19bc2afbfba9a4d9ded2edd4b9c3da6f1a9f15924864e842445022",
+     "meta": {
+      "headings": [
+       "3. Web apps on Vercel"
+      ],
+      "source_ref": "docs/DEPLOY_FREE_TIER.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 6,
+     "heading_path": "Free-tier deployment: Render (API + database) and Vercel (web apps) › 4. Connect the two",
+     "body": "- On Render, set `CORS_ORIGINS` to both Vercel URLs, for example\n  `https://bengaluru-pulse.vercel.app,https://bengaluru-pulse-admin.vercel.app`, then save.\n  Render redeploys.\n- If you use Firebase, add both Vercel domains under Firebase console → Authentication →\n  Settings → **Authorized domains**.",
+     "measured_on": null,
+     "content_hash": "bc6490cb17b93e1893336403dd0fac4ee270f60a0d65e85c53565004d55bd2bd",
+     "meta": {
+      "headings": [
+       "4. Connect the two"
+      ],
+      "source_ref": "docs/DEPLOY_FREE_TIER.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 7,
+     "heading_path": "Free-tier deployment: Render (API + database) and Vercel (web apps) › 5. Collector (optional, needs a TomTom key for traffic)",
+     "body": "GitHub repository → Settings → Secrets and variables → Actions → add:\n\n- `COLLECTOR_DATABASE_URL`: the Render database's **External Database URL**\n- `TOMTOM_API_KEY`: the same key as on Render\n\nThen go to Actions → \"Traffic collector (scheduled)\" → **Run workflow** once, and check that the log\nreports stored observations. Until `COLLECTOR_DATABASE_URL` exists, the job skips itself.",
+     "measured_on": null,
+     "content_hash": "216cd99e9fcab759c415bdb325f29fd266f540fdfe4b81e7dd8102888de07f58",
+     "meta": {
+      "headings": [
+       "5. Collector (optional, needs a TomTom key for traffic)"
+      ],
+      "source_ref": "docs/DEPLOY_FREE_TIER.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 8,
+     "heading_path": "Free-tier deployment: Render (API + database) and Vercel (web apps) › 6. Checks before calling it deployed",
+     "body": "1. `https://<api>/health` returns `status: ok`.\n2. `https://<api>/health/ready` shows `database: ok` and `osrm_car: ok`.\n3. Open the Vercel URL, register, sign in, and plan a car route. You should see routes on the map.\n4. The browser console shows no CORS errors.\n5. The admin URL loads and signs in with the admin account.",
+     "measured_on": null,
+     "content_hash": "22bebb4f9ddff039bfe1b2e84b1af728656aa3307bd30ce27c3c7b9a68c33b81",
+     "meta": {
+      "headings": [
+       "6. Checks before calling it deployed"
+      ],
+      "source_ref": "docs/DEPLOY_FREE_TIER.md",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "eval_report",
+   "source_ref": "backend/evaluation/v2/segment-speed-ratio.json",
+   "title": "Evaluation report segment-speed-ratio",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "bc9a2d672e5fba63b370b83cc4c66ba3f658bd6f8936663a13cac0e89d63f3ca",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Evaluation report segment-speed-ratio › Summary",
+     "body": "Task segment_speed_ratio.\ndataset: Bengaluru Pulse collected TomTom flow observations (26 monitored points)\nnotes: Current/free-flow speed ratio at monitored points, 30-120 minutes ahead.\nstatus: insufficient_data\nreason: 0.0 days collected; at least 14 days required for a chronological train/validation/test evaluation\nseries: 26\nobservations: 78\nspan days: 0.04\ngenerated at: 2026-10-22T04:30:29.538490+00:00\nperiod: 2026-10-22 03:00:00+00:00 to 2026-10-22 04:00:00+00:00\ndata validation rows raw: 78\ndata validation low confidence dropped: 0\ndata validation duplicates merged: 0",
+     "measured_on": "2026-10-22",
+     "content_hash": "40f91ba2e81fe967ef2d67fdf3983e7fb7f2357c745288417a1d7d5dc5b21e80",
+     "meta": {
+      "headings": [
+       "Summary"
+      ],
+      "source_ref": "backend/evaluation/v2/segment-speed-ratio.json",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  },
+  {
+   "source_type": "eval_report",
+   "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
+   "title": "Evaluation report research-daily-congestion",
+   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "content_hash": "0645c4fea57c4ffdecd3e687219ef47128006d3e05a1a2814fdce535be3495c0",
+   "visibility": "user",
+   "chunks": [
+    {
+     "ordinal": 0,
+     "heading_path": "Evaluation report research-daily-congestion › Summary",
+     "body": "Task road_congestion_day_ahead.\ndataset: Banglore_traffic_Dataset.csv (public, daily, 16 roads)\nnotes: Day-ahead congestion level per road. Same-day volume/speed are NOT used (unknown at forecast time).\nstatus: evaluated\nseries: 16\nobservations: 8936\nspan days: 951\ngenerated at: 2026-10-22T04:29:54.879670+00:00\nperiod: 2022-01-01 00:00:00 to 2024-08-09 00:00:00\ndata validation rows raw: 8936\ndata validation duplicates dropped: 0\ndata validation nulls dropped: 0\ndata validation out of range dropped: 0\ndata validation share at cap 100: 0.435\ndata validation lag1 autocorrelation mean: -0.008\ndata validation dow mean spread: 1.147\nactivation rule: test MAE >= 5% below the best baseline, >= 200 test samples, every horizon\nactivation activated: False",
+     "measured_on": "2026-10-22",
+     "content_hash": "d35b2ae8a2ca3a73a3838a28901471d6c456caf3238a56e9d0db6394d80b19a7",
+     "meta": {
+      "headings": [
+       "Summary"
+      ],
+      "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 1,
+     "heading_path": "Evaluation report research-daily-congestion › Horizon 1d",
+     "body": "Task road_congestion_day_ahead, horizon 1d. Metrics rounded to 3 decimals.\nselected model: ridge\nbest baseline: baseline:historical_average\ntest improvement vs best baseline: -0.006\ntrain period: 2022-01-02 00:00:00 to 2023-09-11 00:00:00\nvalidation period: 2023-09-12 00:00:00 to 2024-01-31 00:00:00\ntest period: 2024-02-01 00:00:00 to 2024-08-09 00:00:00\ntest baseline:persistence: mae 20.217, rmse 29.124, smape 30.125, r2 -0.541, bias -0.019, n 1791\ntest baseline:seasonal_naive: mae 19.737, rmse 28.529, smape 29.541, r2 -0.478, bias 0.237, n 1791\ntest baseline:historical_average: mae 15.985, rmse 20.492, smape 22.727, r2 0.237, bias -0.673, n 1791\ntest model:ridge: mae 16.079, rmse 20.606, smape 22.84, r2 0.229, bias -0.79, n 1791\nvalidation baseline:persistence: mae 20.005, rmse 28.508, smape 29.658, r2 -0.472, bias 0.082, n 1364\nvalidation baseline:seasonal_naive: mae 20.468, rmse 28.805, smape 30.308, r2 -0.503, bias -0.143, n 1364\nvalidation baseline:historical_average: mae 16.042, rmse 20.398, smape 22.907, r2 0.246, bias 0.298, n 1364\nvalidation model:ridge: mae 16.015, rmse 20.526, smape 22.897, r2 0.237, bias 0.776, n 1364\nvalidation model:hgb_lr0.05_l15: mae 16.523, rmse 20.895, smape 23.527, r2 0.209, bias 0.188, n 1364\nvalidation model:hgb_lr0.05_l31: mae 16.788, rmse 21.19, smape 23.868, r2 0.187, bias -0.254, n 1364\nvalidation model:hgb_lr0.1_l15: mae 16.88, rmse 21.385, smape 23.986, r2 0.172, bias -0.104, n 1364\nvalidation model:hgb_lr0.1_l31: mae 17.282, rmse 21.812, smape 24.544, r2 0.138, bias -0.614, n 1364",
+     "measured_on": "2026-10-22",
+     "content_hash": "e0fc323c38b39455706266b108eef6ed41088daa435f15dbacfa87a597af6897",
+     "meta": {
+      "headings": [
+       "Horizon 1d"
+      ],
+      "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 2,
+     "heading_path": "Evaluation report research-daily-congestion › Horizon 7d",
+     "body": "Task road_congestion_day_ahead, horizon 7d. Metrics rounded to 3 decimals.\nselected model: ridge\nbest baseline: baseline:historical_average\ntest improvement vs best baseline: -0.006\ntrain period: 2022-01-08 00:00:00 to 2023-09-13 00:00:00\nvalidation period: 2023-09-14 00:00:00 to 2024-02-02 00:00:00\ntest period: 2024-02-03 00:00:00 to 2024-08-09 00:00:00\ntest baseline:persistence: mae 19.661, rmse 28.414, smape 29.169, r2 -0.462, bias 1.363, n 1774\ntest baseline:seasonal_naive: mae 19.661, rmse 28.414, smape 29.169, r2 -0.462, bias 1.363, n 1774\ntest baseline:historical_average: mae 16.008, rmse 20.528, smape 22.78, r2 0.237, bias -0.652, n 1774\ntest model:ridge: mae 16.097, rmse 20.612, smape 22.906, r2 0.23, bias -0.806, n 1774\nvalidation baseline:persistence: mae 20.766, rmse 29.158, smape 30.739, r2 -0.558, bias -0.383, n 1359\nvalidation baseline:seasonal_naive: mae 20.766, rmse 29.158, smape 30.739, r2 -0.558, bias -0.383, n 1359\nvalidation baseline:historical_average: mae 15.968, rmse 20.284, smape 22.736, r2 0.246, bias 0.185, n 1359\nvalidation model:ridge: mae 15.967, rmse 20.452, smape 22.756, r2 0.234, bias 0.517, n 1359\nvalidation model:hgb_lr0.05_l15: mae 16.173, rmse 20.733, smape 23.015, r2 0.212, bias 0.316, n 1359\nvalidation model:hgb_lr0.05_l31: mae 16.49, rmse 21.052, smape 23.385, r2 0.188, bias 0.089, n 1359\nvalidation model:hgb_lr0.1_l15: mae 16.433, rmse 21.042, smape 23.347, r2 0.189, bias -0.078, n 1359\nvalidation model:hgb_lr0.1_l31: mae 16.855, rmse 21.659, smape 23.86, r2 0.14, bias 0.016, n 1359",
+     "measured_on": "2026-10-22",
+     "content_hash": "6472137214e9a5ba170323ebc3ea1237e488bfc33bd6472b26fed29dfeacc09d",
+     "meta": {
+      "headings": [
+       "Horizon 7d"
+      ],
+      "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    },
+    {
+     "ordinal": 3,
+     "heading_path": "Evaluation report research-daily-congestion › Legacy V1 check",
+     "body": "Task road_congestion_day_ahead: V1-style same-day estimation (inputs include same-day volume and speed) — not a forecast.\nchronological split test: mae 2.976, rmse 4.596, r2 0.962, n 1791\nrandom split test: mae 3.002, rmse 4.665, r2 0.96, n 1788\nchronological without same day measurements: mae 16.028, rmse 20.565, r2 0.232, n 1791",
+     "measured_on": "2026-10-22",
+     "content_hash": "1cbb42d5a96be744c8cd6982f4135fad6276d8268c887d0bb1aa78825c2c14b9",
+     "meta": {
+      "headings": [
+       "Legacy V1 check"
+      ],
+      "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
+      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+     }
+    }
+   ]
+  }
+ ]
+}

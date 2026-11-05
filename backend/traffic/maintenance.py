@@ -9,7 +9,7 @@ from typing import Dict
 from sqlalchemy import delete
 
 from core.settings import Settings
-from db.models import ProviderCall, RevokedToken, TrafficObservation, Trip, WeatherObservation
+from db.models import ProviderCall, RagQuery, RevokedToken, TrafficObservation, Trip, WeatherObservation
 from db.session import session_scope
 
 logger = logging.getLogger("pulse.maintenance")
@@ -30,6 +30,9 @@ def run_retention(settings: Settings, now: datetime | None = None) -> Dict[str, 
             "provider_calls": s.execute(delete(ProviderCall).where(ProviderCall.called_at < now - timedelta(days=90))).rowcount,
             "gps_traces_purged": purge_old_traces(s, settings, now),
             "shortcuts_marked_stale": mark_stale(s, now),
+            # Assistant question log (no user id); 0 days = text is never stored, rows kept for metrics.
+            "rag_queries": s.execute(delete(RagQuery).where(
+                RagQuery.created_at < now - timedelta(days=max(settings.rag_query_retention_days, 1)))).rowcount,
         }
     logger.info("Retention: %s", result)
     return result
