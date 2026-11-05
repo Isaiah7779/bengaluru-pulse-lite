@@ -56,3 +56,6 @@ GoogleService-Info.plist
 !mobile/android/app/debug.keystore
 *.jks
 keystore.properties
+.vercel
+.env*
+!.env.example

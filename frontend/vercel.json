@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "create-react-app",
   "installCommand": "npm ci",
-  "buildCommand": "if [ -z \"$REACT_APP_API_BASE_URL\" ]; then echo 'REACT_APP_API_BASE_URL is not set (e.g. https://bengaluru-pulse-api.onrender.com)'; exit 1; fi; npm run build",
+  "buildCommand": "node scripts/check-api-base-url.js && npm run build",
   "outputDirectory": "build",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "headers": [

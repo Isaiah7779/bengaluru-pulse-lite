@@ -1,0 +1,49 @@
+# Files the Vercel CLI must not upload when deploying from the repo root.
+# The commuter web app lives in frontend/ (Vercel project Root Directory = frontend).
+# Patterns are anchored with a leading "/" on purpose: an unanchored "data" would also
+# drop frontend/src/data/ and break the build.
+
+# VCS, local Vercel link, secrets and local environments
+/.git
+/.vercel
+.env
+.env.*
+!.env.example
+/.env.example
+/.venv
+/.venv-v2
+/venv
+/.streamlit
+
+# Other apps and services (deployed elsewhere or not at all)
+/backend
+/mobile
+/firebase
+/frontend4admin
+/streamlit_ui
+/streamlit_tests
+/routing
+/infrastructure
+
+# Data, tools, docs and assets
+/data
+/datasets
+/tools
+/docs
+/Magazine Church Pics
+/dist
+/__pycache__
+
+# Dependencies, build output, caches and test artifacts (anywhere)
+node_modules
+/frontend/build
+coverage
+__pycache__
+.pytest_cache
+.cache
+*.pyc
+*.pkl
+*.joblib
+*.sqlite
+*.db
+*.log
