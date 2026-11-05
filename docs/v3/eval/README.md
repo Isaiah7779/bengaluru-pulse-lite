@@ -17,6 +17,25 @@ live conditions 3, prediction refusals 3, fabrication refusals 3, personal-data
 refusals 2, prompt injection 2. Phrasing deliberately mixes formal and casual
 English ("why do i only see 5 routes max?") and local names (ORR, Silk Board, KIA).
 
+A second file, `scope_cases_v0.jsonl`, holds 60 scope-check cases (20 positive,
+15 negative, 10 ambiguous, 15 adversarial) with fields `id`, `group`, `question`,
+`expected_scope` (`in_scope` | `out_of_scope` | `scope_unclear`), optional
+`expected_refusal` (a safety rule must refuse first) and `notes`. See
+[SCOPE_CHECK.md](../SCOPE_CHECK.md#8-test-cases) and its §9 for how it was written and
+what it can and cannot show.
+
+`scope_dev_v2.jsonl` is the development set for scope checker v2 (74 cases in 7
+categories, written on 5 November 2026 without reusing held-out wording). Tuning is allowed
+on it; see [../SCOPE_V2_DEV_RESULTS.md](../SCOPE_V2_DEV_RESULTS.md).
+
+`heldout_scope_v1.jsonl` holds 30 held-out scope questions written by the owner and
+authored on 5 November 2026, after the scope checker was frozen (git blob hashes
+`scope.py` 2726dcaf, `scope_terms.py` 0352815e, `scope_eval.py` 89bfb6dd). Labels:
+H01–H12 `in_scope`, H13–H22 `out_of_scope`, H23–H30 `ambiguous` (expected to get the
+`scope_unclear` fallback). Each line carries `authored_on` and `set`. The set is reserved for
+final evaluation: never tune on it, never edit it, and do not add it to the golden set.
+Results of its first and only run are in [../HELDOUT_SCOPE_V1_RESULTS.md](../HELDOUT_SCOPE_V1_RESULTS.md).
+
 ## Item fields
 
 | Field | Meaning |

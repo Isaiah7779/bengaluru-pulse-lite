@@ -30,9 +30,30 @@ with the commit SHA. Definitions are in [eval/README.md](eval/README.md#metrics)
 | P1-4 | Every chunk has `heading_path`, `commit_sha`, `content_hash`; tables are never split mid-row | Test over the real corpus |
 | P1-5 | Retrieval recall@5 on answerable questions (`expected_behavior = answer`) | ≥ 0.80 *provisional* |
 | P1-6 | Mean reciprocal rank on the same questions | ≥ 0.60 *provisional* |
-| P1-7 | Out-of-scope questions: no chunk above `RAG_MIN_SCORE` | ≥ 0.90 of `out_of_scope` items *provisional* |
+| P1-7 | Out-of-scope questions: no chunk above `RAG_MIN_SCORE` | ≥ 0.90 of `out_of_scope` items *provisional*. **Failed on 2026-11-03 and superseded** by the scope check (S-1 to S-9 below; owner decision 2026-11-03) |
 | P1-8 | Retrieval latency, p95 over the evaluation set, local PostGIS, warm | ≤ 150 ms *provisional* |
 | P1-9 | Full ingest time for the v0 corpus | ≤ 60 s |
+
+## Phase 2: scope check
+
+Design: [SCOPE_CHECK.md](SCOPE_CHECK.md). Cases: [eval/scope_cases_v0.jsonl](eval/scope_cases_v0.jsonl)
+(60 cases) and the golden set. All are unit tests (SQLite, no database needed for the check itself).
+
+| ID | Criterion | Target |
+|---|---|---|
+| S-1 | Negative cases (N-*) are never answered: decision is `out_of_scope` or `scope_unclear`, exactly as each case states | 15 of 15 (hard) |
+| S-2 | Golden out-of-scope items OS-01 to OS-04 get `out_of_scope` | 4 of 4 (hard) |
+| S-3 | Positive cases (P-*) and golden answerable, explain and facts items: none gets `out_of_scope` | 0 (hard) |
+| S-4 | Same sets: share that gets `scope_unclear` instead of `in_scope` | ≤ 5 % *provisional* (P-20 is the one expected today) |
+| S-5 | Ambiguous cases (A-*) match their stated decision | 10 of 10 (hard) |
+| S-6 | Adversarial cases (X-*) match their stated decision; those with `expected_refusal` are refused by the safety rule before scope, with that code | 15 of 15 (hard) |
+| S-7 | Every vocabulary concept: each listed form matches; a substring decoy (e.g. `trafficking`, `beta`) does not | 100 % (hard) |
+| S-8 | Out-of-scope and unclear responses use the fixed templates, contain no user text, no citations, and trigger no retrieval call | Test (hard) |
+| S-9 | Scope decision is deterministic: the same input gives the same decision 100 times; the check does not touch the database | Test (hard) |
+
+A vocabulary change in Phase 2 or later must keep S-1 to S-9 passing, add a case for the
+change, and be recorded with its reason in SCOPE_CHECK.md. `scope_cases_v0` is not edited
+to fit a vocabulary change; new expectations go into a new version.
 
 ## Phase 2: ask endpoint (no LLM)
 
@@ -42,7 +63,7 @@ with the commit SHA. Definitions are in [eval/README.md](eval/README.md#metrics)
 | P2-2 | Grounding violations: numbers in answers not found in facts or cited chunks | 0 across the evaluation set (hard) |
 | P2-3 | Citation validity: every citation id was retrieved for the request and resolves via `/v1/assistant/sources/{id}` | 100 % (hard) |
 | P2-4 | Refusal correctness: `expected_behavior = refuse` items return the expected `refusal_code` | 100 % (hard) |
-| P2-5 | False refusals on answerable items | ≤ 10 % *provisional* |
+| P2-5 | False refusals on answerable items (any refusal code, including `scope_unclear`) | ≤ 10 % *provisional* |
 | P2-6 | Dated facts: answers quoting a chunk with `measured_on` include that date | 100 % (hard) |
 | P2-7 | Rate limit returns 429 after the configured count | Test |
 | P2-8 | Retention: rows older than `RAG_QUERY_RETENTION_DAYS` deleted by `run_retention`; `0` stores no question text | Test (hard) |

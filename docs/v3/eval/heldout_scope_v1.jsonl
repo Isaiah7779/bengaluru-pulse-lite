@@ -1,0 +1,30 @@
+{"id":"H01","question":"Why does my commute take longer on Mondays?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H02","question":"Is there a faster way to get to the office during peak hours?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H03","question":"What caused the slowdown near the flyover this morning?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H04","question":"Will heavy rain affect my journey tonight?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H05","question":"How much extra time should I leave for my trip tomorrow?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H06","question":"Which roads are moving slowly right now?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H07","question":"Can you explain why the alternate route is shorter but takes longer?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H08","question":"Has the roadwork near my usual junction finished?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H09","question":"What is the difference between today's travel time and yesterday's?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H10","question":"Is my usual way home affected by an accident?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H11","question":"How reliable is the traffic forecast for the next hour?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H12","question":"Why does my estimated arrival time keep changing?","expected":"in_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H13","question":"Where can I get good biryani near Koramangala?","expected":"out_of_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H14","question":"Suggest some affordable apartments in Whitefield.","expected":"out_of_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H15","question":"What are the best colleges for engineering in Bengaluru?","expected":"out_of_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H16","question":"Can you recommend a laptop for machine learning?","expected":"out_of_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H17","question":"How do I prepare for a Python interview?","expected":"out_of_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H18","question":"What is the weather like in Bengaluru this weekend?","expected":"out_of_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H19","question":"Find a good coffee shop near my office.","expected":"out_of_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H20","question":"Explain how gradient descent works.","expected":"out_of_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H21","question":"What are the latest cricket scores?","expected":"out_of_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H22","question":"Tell me the history of Bangalore Palace.","expected":"out_of_scope","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H23","question":"How far is the airport from here?","expected":"ambiguous","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H24","question":"Is Whitefield far from Electronic City?","expected":"ambiguous","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H25","question":"How long does it usually take to reach the airport?","expected":"ambiguous","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H26","question":"What is happening around Marathahalli?","expected":"ambiguous","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H27","question":"Can you help me plan my journey?","expected":"ambiguous","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H28","question":"Is it better to leave now or later?","expected":"ambiguous","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H29","question":"Why is everything so slow today?","expected":"ambiguous","authored_on":"2026-11-05","set":"heldout_scope_v1"}
+{"id":"H30","question":"How do I get there?","expected":"ambiguous","authored_on":"2026-11-05","set":"heldout_scope_v1"}

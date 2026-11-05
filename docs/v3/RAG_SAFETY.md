@@ -36,7 +36,10 @@ The assistant is a reader. These components remain the only sources of their out
    * `prediction_unavailable`: asks for a forecast the predictor does not serve.
    * `no_live_data`: asks for current conditions where none are collected.
    * `fabrication_request`: asks the assistant to invent, guess or "assume" numbers.
-   * `out_of_scope`: unrelated to Bengaluru Pulse, routing or traffic.
+   * `out_of_scope`: unrelated to Bengaluru Pulse, routing or traffic, as decided by the
+     scope check ([SCOPE_CHECK.md](SCOPE_CHECK.md)); fixed template, no retrieval.
+   * `scope_unclear`: the scope check cannot establish scope with confidence (conservative
+     fallback); fixed rephrase template, no retrieval.
    * `personal_data`: asks about other users, accounts or submissions.
    * `plan_expired` (410): explain-route with a plan id that has expired from the cache.
    * `plan_not_found` (404): a plan id that never existed or belongs to another user
@@ -112,7 +115,8 @@ The assistant is a reader. These components remain the only sources of their out
 
 | Failure | Behaviour |
 |---|---|
-| Retrieval returns nothing above the score floor | Answer "I could not find this in the Pulse documentation" with no citations; no guess |
+| In-scope question, retrieval returns no chunk | Answer "I could not find this in the Pulse documentation" with no citations; no guess |
+| Scope check: out of scope or unclear | Fixed template from SCOPE_CHECK.md §6; no retrieval, no citations |
 | Database unavailable | `503` with the standard error envelope; no partial answer |
 | Grounding guard fails | Return the deterministic template answer; log `guard_failed` with rule id |
 | Plan expired | `410 plan_expired`; client re-plans once and retries |

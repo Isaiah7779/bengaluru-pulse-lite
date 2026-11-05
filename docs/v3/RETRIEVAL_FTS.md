@@ -36,8 +36,9 @@ code (`assistant/corpus.py`) and is covered by a test, so adding a source is a r
 2. Keep tables and fenced code blocks whole. A table larger than the window is split
    by rows, and the header row is repeated in each piece.
 3. Pack paragraphs into windows of about 350 words (a stand-in for ~400 tokens, so no
-   tokenizer dependency), with a 50-word overlap inside a section. Never cross a
-   section boundary.
+   tokenizer dependency). Overlap is by whole paragraph: a last paragraph of ≤ 50 words
+   is carried into the next window; tables and code blocks are never carried. Never
+   cross a section boundary.
 4. Extract the document's measurement date if the section states one (patterns such
    as `measured 2026-10-22`, `(2026‑10‑22)`, `22 Oct 2026`); store it as `measured_on`.
 5. JSON evaluation reports are rendered by fixed templates into one chunk per task and
@@ -123,9 +124,11 @@ ORDER BY score DESC
 LIMIT :k;
 ```
 
-* Normalisation flag 32 maps rank into 0–1 (`rank / (rank + 1)`), so one score floor
-  works across queries. The floor (`RAG_MIN_SCORE`) is set in Phase 1 from the
-  evaluation set, not guessed; below it the answer is "not found".
+* Normalisation flag 32 maps rank into 0–1 (`rank / (rank + 1)`). **No score floor is
+  used.** Phase 1 measured that no floor separates out-of-scope questions from real ones
+  ([PHASE1_RESULTS.md](PHASE1_RESULTS.md)), so scope is decided before retrieval by the
+  deterministic check in [SCOPE_CHECK.md](SCOPE_CHECK.md) (owner decision, 2026-11-03).
+  An in-scope question with no matching chunk gets the "not found" answer.
 * Tie-break: shorter chunk first, then lower ordinal (earlier in the document).
 * At most 2 chunks per document in the top 5, so one long document does not crowd
   out others.
