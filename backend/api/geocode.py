@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from api.deps import settings_dep
+from core.errors import UpstreamUnavailable
 from core.settings import Settings
 from db.session import get_db
 from geocoding import service
@@ -26,16 +27,28 @@ async def search(
 ):
     near = (near_lat, near_lon) if near_lat is not None and near_lon is not None else None
     result = await service.search(db, settings, q, limit, near)
+    if not result["results"] and result["unavailable"]:
+        # Nothing found and the address geocoder failed: an outage, never "no match".
+        if result["rate_limited"]:
+            raise UpstreamUnavailable(
+                "Place search is busy right now. Wait a few seconds and try again, or pick the place on the map.",
+                code="geocoder_rate_limited",
+            )
+        raise UpstreamUnavailable(
+            "Place search is temporarily unavailable. Try again shortly or pick the place on the map.",
+            code="geocoder_unavailable",
+        )
     result["attribution"] = "© OpenStreetMap contributors (ODbL)" + (
-        "; Photon by komoot" if "photon" in result["sources"] else ""
+        "; search by Photon (komoot)" if "photon" in result["sources"] else ""
     )
     return result
 
 
 @router.get("/reverse")
-def reverse(
+async def reverse(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(settings_dep),
 ):
-    return service.reverse(db, lat, lon)
+    return await service.reverse(db, settings, lat, lon)

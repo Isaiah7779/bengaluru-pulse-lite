@@ -100,12 +100,64 @@ test("place search shows suggestions and returns the chosen place", async () => 
   render(<PlaceSearch label="From" value={null} onChange={onChange} onPickOnMap={() => {}} />);
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "indira" } });
   await act(async () => {
-    jest.advanceTimersByTime(300);
+    jest.advanceTimersByTime(400);
   });
   jest.useRealTimers();
   const option = await screen.findByRole("option", { name: /Indiranagar/ });
   fireEvent.mouseDown(option);
   expect(onChange).toHaveBeenCalledWith({ lat: 12.97, lon: 77.64, label: "Indiranagar" });
+});
+
+async function typeQuery(value) {
+  jest.useFakeTimers();
+  render(<PlaceSearch label="From" value={null} onChange={() => {}} onPickOnMap={() => {}} />);
+  fireEvent.change(screen.getByRole("combobox"), { target: { value } });
+  await act(async () => {
+    jest.advanceTimersByTime(400);
+  });
+  jest.useRealTimers();
+}
+
+const NO_MATCH = /No matching place/;
+
+test("place search outage is reported as unavailable, not as no matching place", async () => {
+  respond({
+    "/v1/geocode/search": [503, { error: { code: "geocoder_unavailable", message: "Place search is temporarily unavailable." } }],
+  });
+  await typeQuery("cmr");
+  expect(await screen.findByText(/temporarily unavailable/)).toBeInTheDocument();
+  expect(screen.queryByText(NO_MATCH)).not.toBeInTheDocument();
+});
+
+test("place search rate limit and network failures get their own messages", async () => {
+  respond({ "/v1/geocode/search": [503, { error: { code: "geocoder_rate_limited", message: "busy" } }] });
+  await typeQuery("hoodi");
+  expect(await screen.findByText(/busy right now/)).toBeInTheDocument();
+  expect(screen.queryByText(NO_MATCH)).not.toBeInTheDocument();
+});
+
+test("network failure during place search is not shown as no match", async () => {
+  global.fetch = jest.fn(() => Promise.reject(new TypeError("Failed to fetch")));
+  await typeQuery("varthur");
+  expect(await screen.findByText(/Can't reach the server/)).toBeInTheDocument();
+  expect(screen.queryByText(NO_MATCH)).not.toBeInTheDocument();
+});
+
+test("a genuine empty answer shows no matching place; short input asks for more", async () => {
+  respond({ "/v1/geocode/search": [200, { results: [], sources: [], unavailable: [] }] });
+  await typeQuery("zzqxv");
+  expect(await screen.findByText(NO_MATCH)).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "cm" } });
+  expect(await screen.findByText(/at least 3 characters/)).toBeInTheDocument();
+  expect(screen.queryByText(NO_MATCH)).not.toBeInTheDocument();
+});
+
+test("place suggestions show the address line", async () => {
+  respond({
+    "/v1/geocode/search": [200, { results: [{ id: "photon:N1", name: "367 6th Cross Road", label: "367 6th Cross Road, Whitefield, 560066", address: "Whitefield, 560066", category_label: "Address", lat: 12.98, lon: 77.75 }] }],
+  });
+  await typeQuery("367 6th cross whitefield");
+  expect(await screen.findByRole("option", { name: /Address · Whitefield, 560066/ })).toBeInTheDocument();
 });
 
 // TEST FIXTURE (shape of a /v1/routes response), not real traffic data.

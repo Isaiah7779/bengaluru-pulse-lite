@@ -19,7 +19,7 @@ so; nothing is simulated.
 
 | Feature | Backed by |
 |---|---|
-| Place search: addresses, landmarks, shops, localities, coordinates, GPS, map tap | 68,761-place OSM gazetteer (Photon fallback) |
+| Place search: addresses, landmarks, shops, localities, coordinates, GPS, map tap | Photon (OpenStreetMap) address search, plus the local OSM gazetteer when built |
 | Car / motorcycle / bicycle / walking routes with turn-by-turn steps | OSRM car, foot and bicycle graphs (motorcycle uses the car graph, disclosed) |
 | Up to 5 diverse alternatives | OSRM alternatives + corridor candidates, geometric deduplication |
 | Live or future-departure travel times | TomTom routing on each route's own geometry |
@@ -188,4 +188,4 @@ For questions, collaborations, or feedback:
 ## Data and attribution
 
 Map data © OpenStreetMap contributors (ODbL). Weather by Open-Meteo.com (CC BY 4.0).
-Traffic by TomTom (free developer tier). Geocoding fallback by Photon (komoot).
+Traffic by TomTom (free developer tier). Place search by Photon (komoot), © OpenStreetMap contributors.

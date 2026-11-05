@@ -1,6 +1,20 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../api/client";
 
+export const MIN_CHARS = 3; // matches the backend's GEOCODE_MIN_CHARS
+const DEBOUNCE_MS = 350;
+
+/** What to tell the user when a search request fails (never "no matching place"). */
+export function searchErrorMessage(err) {
+  if (err && err.code === "network_error") return "Can't reach the server. Check your connection and try again.";
+  if (err && (err.code === "geocoder_rate_limited" || err.status === 429))
+    return "Place search is busy right now. Wait a few seconds and try again, or pick the place on the map.";
+  if (err && (err.code === "geocoder_unavailable" || err.status >= 500))
+    return "Place search is temporarily unavailable. Try again shortly or pick the place on the map.";
+  if (err && err.status === 401) return "Your session has ended. Sign in again to search places.";
+  return (err && err.message) || "Place search failed. Try again or pick the place on the map.";
+}
+
 /** Search box with suggestions, current-location and pick-on-map actions. */
 export default function PlaceSearch({ label, value, onChange, onPickOnMap, picking, near }) {
   const [text, setText] = useState(value?.label || "");
@@ -9,6 +23,7 @@ export default function PlaceSearch({ label, value, onChange, onPickOnMap, picki
   const [active, setActive] = useState(-1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [searched, setSearched] = useState(false); // last query got a real (possibly empty) answer
   const typed = useRef(false);
   const listId = useId();
 
@@ -19,28 +34,34 @@ export default function PlaceSearch({ label, value, onChange, onPickOnMap, picki
   useEffect(() => {
     if (!typed.current) return undefined;
     const q = text.trim();
-    if (q.length < 2) {
-      setResults([]);
+    // A search that fails or is superseded must never leave stale results or the
+    // "No matching place" hint behind: reset both before each new query.
+    setResults([]);
+    setSearched(false);
+    setError(null);
+    setBusy(false);
+    if (q.length < MIN_CHARS) {
       return undefined;
     }
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setBusy(true);
-      setError(null);
       try {
         const res = await api("/v1/geocode/search", {
-          params: { q, limit: 7, near_lat: near?.lat, near_lon: near?.lon },
+          params: { q, limit: 8, near_lat: near?.lat, near_lon: near?.lon },
           signal: controller.signal,
         });
         setResults(res.results);
+        setSearched(true);
         setOpen(true);
         setActive(res.results.length ? 0 : -1);
       } catch (err) {
-        if (err.name !== "AbortError") setError(err.message);
+        if (err.name === "AbortError") return;
+        setError(searchErrorMessage(err));
       } finally {
-        setBusy(false);
+        if (!controller.signal.aborted) setBusy(false);
       }
-    }, 250);
+    }, DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
       controller.abort();
@@ -153,14 +174,17 @@ export default function PlaceSearch({ label, value, onChange, onPickOnMap, picki
               <span className="s-name">{r.name}</span>
               <span className="s-meta">
                 {r.category_label}
-                {r.locality ? ` · ${r.locality}` : ""}
+                {r.address ? ` · ${r.address}` : r.locality ? ` · ${r.locality}` : ""}
                 {r.distance_m != null ? ` · ${(r.distance_m / 1000).toFixed(1)} km` : ""}
               </span>
             </li>
           ))}
         </ul>
       )}
-      {open && !busy && results.length === 0 && text.trim().length >= 2 && (
+      {typed.current && !busy && !error && text.trim().length > 0 && text.trim().length < MIN_CHARS && (
+        <div className="hint">Type at least {MIN_CHARS} characters to search.</div>
+      )}
+      {open && searched && !busy && !error && results.length === 0 && (
         <div className="hint">No matching place in Bengaluru. Try another name or pick on the map.</div>
       )}
     </div>

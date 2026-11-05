@@ -85,7 +85,9 @@ class Settings(BaseSettings):
     )
     openmeteo_url: str = "https://api.open-meteo.com/v1/forecast"
     photon_url: Optional[str] = "https://photon.komoot.io"
-    geocode_fallback_enabled: bool = True
+    geocode_fallback_enabled: bool = True  # Photon address search on/off (name kept for compatibility)
+    geocode_timeout_seconds: float = 6.0
+    geocode_min_chars: int = 3
 
     # -- collector -------------------------------------------------------------
     collector_enabled: bool = False

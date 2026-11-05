@@ -2,14 +2,20 @@
 
 Order of resolution:
 1. Coordinates typed by the user ("12.97, 77.59", "12°58'N 77°35'E").
-2. Local OSM gazetteer (`places` table) — self-hosted, no third-party quota.
-3. Photon (komoot) fallback when local results are thin, restricted to the
-   Bengaluru bounding box and cached. Nominatim is never used for autocomplete
-   (forbidden by its usage policy).
+2. Photon (komoot): OpenStreetMap search over addresses (house numbers where
+   mapped), streets, buildings, apartments, layouts and POIs. Restricted to the
+   Bengaluru bounding box, biased to the other route endpoint, cached for an hour,
+   concurrency-capped and backed off on HTTP 429 (fair use of the public instance;
+   point PHOTON_URL at a self-hosted Photon to extend coverage/limits).
+3. Local OSM gazetteer (`places` table), merged in when it has been built
+   (`python -m geocoding.gazetteer`); hosted deployments usually have none.
+Nominatim is never used for autocomplete (forbidden by its usage policy).
+A Photon failure is reported to the caller, never turned into "no match".
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import re
@@ -137,56 +143,150 @@ def search_local(
     return out
 
 
-async def search_photon(settings: Settings, query: str, limit: int, near: Optional[Tuple[float, float]]) -> List[Dict[str, Any]]:
-    if not settings.geocode_fallback_enabled or not settings.photon_url:
-        return []
-    key = f"{query.lower()}|{limit}"
+class GeocoderUnavailable(Exception):
+    """Photon failed: network error, timeout, HTTP error or rate limit."""
+
+    def __init__(self, reason: str, rate_limited: bool = False):
+        super().__init__(reason)
+        self.reason = reason
+        self.rate_limited = rate_limited
+
+
+# The public Photon instance is fair-use: cache answers, cap concurrency, back off on 429.
+_PHOTON_TTL_S = 3600
+_PHOTON_CACHE_MAX = 2000
+_PHOTON_SLOTS = asyncio.Semaphore(4)
+_PHOTON_STATE = {"backoff_until": 0.0}
+BENGALURU_CENTER = (12.9716, 77.5946)
+
+
+def _cache_get(key: str):
     hit = _PHOTON_CACHE.get(key)
     if hit and hit[0] > time.monotonic():
         return hit[1]
-    params: Dict[str, Any] = {"q": query, "limit": limit, "lang": "en", "bbox": ",".join(map(str, BBOX))}
-    if near:
-        params.update(lat=near[0], lon=near[1])
+    return None
+
+
+def _cache_put(key: str, value) -> None:
+    if len(_PHOTON_CACHE) >= _PHOTON_CACHE_MAX:
+        now = time.monotonic()
+        stale = [k for k, (exp, _) in _PHOTON_CACHE.items() if exp <= now]
+        for k in stale or list(_PHOTON_CACHE)[: _PHOTON_CACHE_MAX // 4]:
+            _PHOTON_CACHE.pop(k, None)
+    _PHOTON_CACHE[key] = (time.monotonic() + _PHOTON_TTL_S, value)
+
+
+def photon_enabled(settings: Settings) -> bool:
+    return bool(settings.geocode_fallback_enabled and settings.photon_url)
+
+
+async def _photon_get(settings: Settings, path: str, params: Dict[str, Any]) -> List[dict]:
+    if time.monotonic() < _PHOTON_STATE["backoff_until"]:
+        raise GeocoderUnavailable("rate_limited", rate_limited=True)
     try:
-        async with async_client(5.0) as client:
-            response = await client.get(
-                settings.photon_url.rstrip("/") + "/api/",
-                params=params,
-                headers={"User-Agent": "BengaluruPulse/3.0 (academic project)"},
-            )
+        async with _PHOTON_SLOTS:
+            async with async_client(settings.geocode_timeout_seconds) as client:
+                response = await client.get(settings.photon_url.rstrip("/") + path, params=params)
+        if response.status_code == 429:
+            _PHOTON_STATE["backoff_until"] = time.monotonic() + 30
+            logger.warning("Photon %s rate-limited (HTTP 429); backing off 30 s", path)
+            raise GeocoderUnavailable("rate_limited", rate_limited=True)
         response.raise_for_status()
-        features = response.json().get("features", [])
+        return response.json().get("features", [])
+    except GeocoderUnavailable:
+        raise
     except (httpx.HTTPError, ValueError) as exc:
-        logger.warning("Photon fallback failed: %s", type(exc).__name__)
+        detail = f"HTTP {exc.response.status_code}" if isinstance(exc, httpx.HTTPStatusError) else type(exc).__name__
+        logger.warning("Photon %s failed: %s", path, detail)
+        raise GeocoderUnavailable(detail) from exc
+
+
+def _photon_result(f: dict, near: Optional[Tuple[float, float]]) -> Optional[Dict[str, Any]]:
+    props = f.get("properties") or {}
+    coords = (f.get("geometry") or {}).get("coordinates") or []
+    if len(coords) != 2:
+        return None
+    lon, lat = float(coords[0]), float(coords[1])
+    house, street = props.get("housenumber"), props.get("street")
+    street_line = " ".join(filter(None, [house, street])) or None
+    name = props.get("name") or street_line
+    if not name:
+        return None
+    area = props.get("locality") or props.get("district")
+    parts = [name]
+    for part in (street_line, area, props.get("city") or props.get("county"), props.get("postcode")):
+        if part and part not in parts:
+            parts.append(part)
+    osm_key, osm_value = props.get("osm_key") or "place", props.get("osm_value") or "place"
+    if house and not props.get("name"):
+        category_label = "Address"
+    elif osm_key == "highway" and osm_value not in ("bus_stop", "platform"):
+        category_label = "Street"
+    else:
+        category_label = osm_value.replace("_", " ").title()
+    return {
+        "id": f"photon:{props.get('osm_type', '')}{props.get('osm_id', '')}",
+        "name": name,
+        "label": ", ".join(parts),
+        "address": ", ".join(parts[1:]) or None,
+        "category": osm_key,
+        "category_label": category_label,
+        "subcategory": osm_value,
+        "locality": area,
+        "housenumber": house,
+        "street": street,
+        "postcode": props.get("postcode"),
+        "lat": lat,
+        "lon": lon,
+        "distance_m": round(haversine_m((near[1], near[0]), (lon, lat))) if near else None,
+        "score": 0.0,
+        "source": "photon",
+    }
+
+
+async def search_photon(settings: Settings, query: str, limit: int, near: Optional[Tuple[float, float]]) -> List[Dict[str, Any]]:
+    """OSM address/street/POI search via Photon inside Bengaluru; raises GeocoderUnavailable on failure."""
+
+    if not photon_enabled(settings):
         return []
-    results = []
+    bias = near or BENGALURU_CENTER
+    key = f"s|{normalize(query)}|{limit}|{bias[0]:.2f},{bias[1]:.2f}"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    params: Dict[str, Any] = {
+        "q": query, "limit": min(limit * 2, 20), "lang": "en", "bbox": ",".join(map(str, BBOX)),
+        "lat": bias[0], "lon": bias[1],
+    }
+    features = await _photon_get(settings, "/api/", params)
+    results, seen = [], set()
     for f in features:
-        props = f.get("properties") or {}
-        coords = (f.get("geometry") or {}).get("coordinates") or []
-        if len(coords) != 2 or not props.get("name"):
+        r = _photon_result(f, near)
+        if r is None or not in_bengaluru(r["lat"], r["lon"]):
             continue
-        lon, lat = float(coords[0]), float(coords[1])
-        if not in_bengaluru(lat, lon):
+        # One feature can come back as node + way + relation: keep one per label and spot.
+        dedupe = (r["label"].lower(), round(r["lat"], 3), round(r["lon"], 3))
+        if dedupe in seen:
             continue
-        context = ", ".join(filter(None, [props.get("street"), props.get("district") or props.get("locality"), props.get("city")]))
-        results.append(
-            {
-                "id": f"photon:{props.get('osm_type', '')}{props.get('osm_id', '')}",
-                "name": props["name"],
-                "label": f"{props['name']}, {context}" if context else props["name"],
-                "category": props.get("osm_key") or "place",
-                "category_label": (props.get("osm_value") or "place").replace("_", " ").title(),
-                "subcategory": props.get("osm_value"),
-                "locality": props.get("district") or props.get("locality"),
-                "lat": lat,
-                "lon": lon,
-                "distance_m": round(haversine_m((near[1], near[0]), (lon, lat))) if near else None,
-                "score": 0.0,
-                "source": "photon",
-            }
-        )
-    _PHOTON_CACHE[key] = (time.monotonic() + 3600, results)
+        seen.add(dedupe)
+        results.append(r)
+        if len(results) >= limit:
+            break
+    _cache_put(key, results)
     return results
+
+
+async def reverse_photon(settings: Settings, lat: float, lon: float) -> Optional[Dict[str, Any]]:
+    if not photon_enabled(settings):
+        return None
+    key = f"r|{lat:.5f},{lon:.5f}"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    features = await _photon_get(settings, "/reverse", {"lat": lat, "lon": lon, "lang": "en", "limit": 1})
+    result = _photon_result(features[0], (lat, lon)) if features else None
+    _cache_put(key, result)
+    return result
 
 
 async def search(
@@ -212,21 +312,38 @@ async def search(
                 }
             ],
             "sources": ["input"],
+            "unavailable": [],
+            "rate_limited": False,
         }
     is_pg = not settings.is_sqlite
     local = search_local(db, query, limit, near, is_postgres=is_pg)
-    sources = ["openstreetmap"] if local else []
-    if len(local) < min(3, limit) and len(query) >= 3:
-        remote = await search_photon(settings, query, limit, near)
-        known = {(round(r["lat"], 3), round(r["lon"], 3)) for r in local}
-        extra = [r for r in remote if (round(r["lat"], 3), round(r["lon"], 3)) not in known]
-        if extra:
-            sources.append("photon")
-        local += extra[: max(limit - len(local), 0)]
-    return {"query": query, "results": local, "sources": sources}
+    remote: List[Dict[str, Any]] = []
+    unavailable: List[str] = []
+    rate_limited = False
+    if len(query) >= settings.geocode_min_chars:
+        try:
+            remote = await search_photon(settings, query, limit, near)
+        except GeocoderUnavailable as exc:
+            unavailable.append("photon")
+            rate_limited = exc.rate_limited
+    # Interleave Photon (city-wide addresses) with local gazetteer hits, minus duplicates.
+    known = {(round(r["lat"], 3), round(r["lon"], 3)) for r in remote}
+    local = [r for r in local if (round(r["lat"], 3), round(r["lon"], 3)) not in known]
+    merged: List[Dict[str, Any]] = []
+    for i in range(max(len(remote), len(local))):
+        merged.extend(rows[i] for rows in (remote, local) if i < len(rows))
+    sources = [name for name, rows in (("photon", remote), ("openstreetmap", local)) if rows]
+    return {
+        "query": query,
+        "results": merged[:limit],
+        "sources": sources,
+        # Lets callers tell "no such place" apart from "the geocoder failed".
+        "unavailable": unavailable,
+        "rate_limited": rate_limited,
+    }
 
 
-def reverse(db: Session, lat: float, lon: float) -> Dict[str, Any]:
+def reverse_local(db: Session, lat: float, lon: float) -> Dict[str, Any]:
     """Nearest named feature, preferring POIs/streets within 150 m, plus locality."""
 
     delta = 0.004
@@ -265,4 +382,31 @@ def reverse(db: Session, lat: float, lon: float) -> Dict[str, Any]:
         "nearest_feature_m": round(best_d) if best is not None and best_d != math.inf else None,
         "within_bengaluru": in_bengaluru(lat, lon),
         "source": "openstreetmap",
+    }
+
+
+async def reverse(db: Session, settings: Settings, lat: float, lon: float) -> Dict[str, Any]:
+    """Address of a map point: Photon reverse when reachable, else the local gazetteer."""
+
+    local = reverse_local(db, lat, lon)
+    if local.get("nearest_feature_m") is not None and local["nearest_feature_m"] <= 30:
+        return local
+    try:
+        hit = await reverse_photon(settings, lat, lon)
+    except GeocoderUnavailable:
+        return local
+    if not hit:
+        return local
+    distance = haversine_m((lon, lat), (hit["lon"], hit["lat"]))
+    if distance > 250:
+        return local
+    return {
+        "lat": lat,
+        "lon": lon,
+        "name": hit["name"],
+        "label": hit["label"],
+        "locality": hit["locality"] or local.get("locality"),
+        "nearest_feature_m": round(distance),
+        "within_bengaluru": in_bengaluru(lat, lon),
+        "source": "photon",
     }

@@ -83,7 +83,23 @@ async def dependency_report(settings: Settings) -> dict:
             }
         except Exception as exc:
             checks["traffic_data"] = {"status": "unknown", "error": type(exc).__name__}
+
+    checks["place_search"] = await geocoder_check(settings)
     return checks
+
+
+async def geocoder_check(settings: Settings) -> dict:
+    """Can this server reach Photon? One cached lookup, so health polling adds no load."""
+
+    from geocoding import service as geo
+
+    if not geo.photon_enabled(settings):
+        return {"status": "not_configured"}
+    try:
+        hits = await geo.search_photon(settings, "Majestic", 1, None)
+        return {"status": "ok" if hits else "empty", "provider": "photon"}
+    except geo.GeocoderUnavailable as exc:
+        return {"status": "rate_limited" if exc.rate_limited else "down", "provider": "photon", "error": exc.reason}
 
 
 @router.get("/health/ready")

@@ -29,7 +29,7 @@ flowchart LR
   COL[collector process<br/>traffic.collector]
   TT[(TomTom APIs)]
   OM[(Open-Meteo)]
-  PH[(Photon, fallback)]
+  PH[(Photon address search)]
 
   W --> C --> N --> API
   M --> C
