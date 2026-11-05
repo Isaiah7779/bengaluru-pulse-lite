@@ -657,3 +657,11 @@ button.small { min-height: 36px; padding: 6px 16px; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   .insight:hover, .insight--art:hover .city-art { transform: none; }
 }
+
+/* V3 assistant (Ask page) */
+.ask-examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ask-answer p, .ask-refusal p { margin: 0 0 8px; line-height: 1.5; }
+.ask-refusal { border-left: 3px solid currentColor; padding-left: 12px; opacity: 0.85; }
+.ask-sources { padding-left: 20px; }
+.ask-source { margin-bottom: 8px; }
+.ask-passage { white-space: pre-wrap; font-size: 0.85rem; max-height: 260px; overflow: auto; padding: 8px; border-radius: 6px; background: rgba(127, 127, 127, 0.08); }
