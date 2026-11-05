@@ -115,6 +115,16 @@ class Settings(BaseSettings):
     legacy_auth_enabled: bool = True
     legacy_registration_enabled: bool = True
 
+    # -- V3 assistant (docs/v3/RAG_SAFETY.md) ---------------------------------
+    rag_query_retention_days: int = Field(
+        30, description="Days to keep assistant question text (no user id is stored); 0 = never store text."
+    )
+    rag_rate_limit_per_10_min: int = 30
+    rag_top_k: int = 5
+    # Load backend/assistant/corpus_snapshot.json into rag_* tables at startup (deployments
+    # have no git checkout or docs/ to ingest from). Unchanged documents are skipped.
+    rag_load_snapshot_on_start: bool = True
+
     # -- legacy ML artifacts -------------------------------------------------
     traffic_model_path: str = "traffic_model_tuned.pkl"
     area_encoder_path_raw: str = Field("area_encoder.pkl", alias="AREA_ENCODER_PATH")

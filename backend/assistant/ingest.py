@@ -87,14 +87,101 @@ def ingest(session: Session, rev: str = "HEAD", repo: Path = corpus.REPO_ROOT, a
     return stats
 
 
+SNAPSHOT_PATH = Path(__file__).resolve().parent / "corpus_snapshot.json"
+
+
+def export_snapshot(rev: str = "HEAD", path: Path = SNAPSHOT_PATH, repo: Path = corpus.REPO_ROOT) -> Dict:
+    """Write the chunked corpus to JSON so a deployment without git or docs/ can load it.
+
+    The snapshot is built by the same code as `ingest` (allowlist, secret guard, chunking)
+    and records the commit it came from.
+    """
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session as _Session
+
+    from db.models import Base
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine, tables=[RagDocument.__table__, RagChunk.__table__])
+    with _Session(engine) as s:
+        stats = ingest(s, rev, repo)
+        docs = []
+        for d in s.scalars(select(RagDocument).order_by(RagDocument.id)):
+            docs.append({
+                "source_type": d.source_type, "source_ref": d.source_ref, "title": d.title,
+                "commit_sha": d.commit_sha, "content_hash": d.content_hash, "visibility": d.visibility,
+                "chunks": [{"ordinal": c.ordinal, "heading_path": c.heading_path, "body": c.body,
+                            "measured_on": c.measured_on.isoformat() if c.measured_on else None,
+                            "content_hash": c.content_hash, "meta": c.meta}
+                           for c in sorted(d.chunks, key=lambda c: c.ordinal)],
+            })
+    payload = {"commit_sha": stats["commit_sha"], "documents": docs}
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return {"commit_sha": stats["commit_sha"], "documents": len(docs), "chunks": stats["chunks_written"], "path": str(path)}
+
+
+def load_snapshot(session: Session, path: Path = SNAPSHOT_PATH) -> Dict[str, int]:
+    """Load the corpus snapshot into rag_* tables; documents with an unchanged hash are skipped."""
+
+    from datetime import date as _date
+
+    if not path.exists():
+        return {"snapshot": 0}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    stats = {"documents_added": 0, "documents_updated": 0, "documents_unchanged": 0, "documents_removed": 0,
+             "chunks_written": 0}
+    existing = {(d.source_type, d.source_ref): d for d in session.scalars(select(RagDocument))}
+    wanted = set()
+    for item in payload["documents"]:
+        key = (item["source_type"], item["source_ref"])
+        wanted.add(key)
+        for c in item["chunks"]:
+            if corpus.find_secret(c["body"]):
+                raise corpus.CorpusError(f"snapshot chunk of {item['source_ref']} looks like a credential")
+        doc = existing.get(key)
+        if doc is not None and doc.content_hash == item["content_hash"]:
+            stats["documents_unchanged"] += 1
+            continue
+        if doc is None:
+            doc = RagDocument(source_type=item["source_type"], source_ref=item["source_ref"])
+            session.add(doc)
+            stats["documents_added"] += 1
+        else:
+            session.execute(delete(RagChunk).where(RagChunk.document_id == doc.id))
+            stats["documents_updated"] += 1
+        doc.title, doc.commit_sha, doc.content_hash = item["title"], item["commit_sha"], item["content_hash"]
+        doc.visibility, doc.ingested_at = item["visibility"], utcnow()
+        session.flush()
+        for c in item["chunks"]:
+            session.add(RagChunk(
+                document_id=doc.id, ordinal=c["ordinal"], heading_path=c["heading_path"], body=c["body"],
+                measured_on=_date.fromisoformat(c["measured_on"]) if c["measured_on"] else None,
+                content_hash=c["content_hash"], meta=c["meta"],
+            ))
+        stats["chunks_written"] += len(item["chunks"])
+    for key, doc in existing.items():
+        if key not in wanted:
+            session.delete(doc)
+            stats["documents_removed"] += 1
+    session.flush()
+    stats["commit_sha"] = payload["commit_sha"]
+    return stats
+
+
 def main(argv: Optional[list] = None) -> None:
     parser = argparse.ArgumentParser(description="Ingest the assistant corpus")
     parser.add_argument("--rev", default="HEAD", help="git revision to read the corpus from")
+    parser.add_argument("--export", action="store_true", help="write corpus_snapshot.json instead of a database")
+    parser.add_argument("--from-snapshot", action="store_true", help="load corpus_snapshot.json into the database")
     args = parser.parse_args(argv)
+    if args.export:
+        print(json.dumps(export_snapshot(args.rev), indent=2))
+        return
     from db.session import session_scope
 
     with session_scope() as s:
-        print(json.dumps(ingest(s, args.rev), indent=2))
+        print(json.dumps(load_snapshot(s) if args.from_snapshot else ingest(s, args.rev), indent=2))
 
 
 if __name__ == "__main__":

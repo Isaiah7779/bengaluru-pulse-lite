@@ -33,6 +33,8 @@ os.environ.update(
         # Most suites exercise endpoints anonymously; test_firebase_auth.py turns this on.
         "API_AUTH_REQUIRED": "false",
         "FIREBASE_PROJECT_ID": "",
+        # Assistant tests load the corpus themselves.
+        "RAG_LOAD_SNAPSHOT_ON_START": "false",
     }
 )
 
