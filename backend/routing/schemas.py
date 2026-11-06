@@ -1,4 +1,4 @@
-﻿from enum import Enum
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -170,7 +170,7 @@ class RouteOption(BaseModel):
     rank: int
     is_reference: bool
     recommended: bool
-    origin_kind: str  # osrm_primary | osrm_alternative | corridor
+    origin_kind: str  # osrm_primary | osrm_alternative | corridor | direct | detour | bypass | osrm_exclude
     distance_m: float
     free_flow_duration_s: float
     eta_s: float
@@ -185,8 +185,24 @@ class RouteOption(BaseModel):
     monitored_segments: List[RouteSegmentEvidence] = Field(default_factory=list)
     explanation: List[str] = Field(default_factory=list)
     summary: str = ""
+    # Roles among the returned routes: fastest | shortest_distance | least_traffic_delay.
+    labels: List[str] = Field(default_factory=list)
+    # Largest share of this route's length that lies on another returned route (0-100).
+    shared_max_pct: Optional[float] = None
     geometry: Dict[str, Any]
     steps: List[RouteStep] = Field(default_factory=list)
+
+
+class RouteSelection(BaseModel):
+    """How the returned routes were chosen from the candidates OSRM produced."""
+
+    osrm_requests: int
+    candidates_considered: int
+    returned: int
+    max_shared_pct: float  # a candidate sharing more than this with a kept route is a near-duplicate
+    min_unique_m: float  # ...or one whose non-shared part is shorter than this
+    rejected: Dict[str, int] = Field(default_factory=dict)
+    note: Optional[str] = None
 
 
 class DataSourceStatus(BaseModel):
@@ -214,4 +230,5 @@ class RouteResponseV2(BaseModel):
     data_sources: List[DataSourceStatus]
     warnings: List[str] = Field(default_factory=list)
     candidates_considered: int
+    selection: Optional[RouteSelection] = None
     trip_id: Optional[int] = None

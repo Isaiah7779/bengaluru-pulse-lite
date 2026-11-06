@@ -71,8 +71,8 @@ flowchart LR
 0. `app_access` resolves the signed-in user; without one the request gets `401` (`API_AUTH_REQUIRED=true`, the default).
 1. Validate the body (`RouteRequestV2`); resolve the vehicle → OSRM server for that profile (503 `mode_unavailable` if absent; never substituted).
 2. OSRM primary route (+ native alternatives) = **reference route**.
-3. Up to 10 corridor via-point routes, 5 at a time (defaults; `OSRM_CORRIDOR_MAX`, `OSRM_MAX_CONCURRENCY`), snapped by OSRM.
-4. Filter: detour limits, U-turn spurs; geometric dedup (symmetric overlap ≥ 0.85).
+3. Up to 10 corridor via-point routes, 5 at a time (defaults; `OSRM_CORRIDOR_MAX`, `OSRM_MAX_CONCURRENCY`), plus 4 straight-line/detour via-routes and up to 3 spur repairs, all within one planning deadline (`ROUTE_PLAN_DEADLINE_S`, 20 s), snapped by OSRM.
+4. Filter: private/destination-only roads mid-trip, motorcycle=no roads for motorcycles, detour limits, U-turn spurs; keep the shortest-distance route, then drop near-duplicates (more than 70 % shared length). Details in [ROUTING.md](ROUTING.md).
 5. TomTom timing per candidate (supportingPoints; departAt for future); reject if length differs > 8 %.
 6. Evidence: incidents *on* the route, monitored-point observations (+ forecast if an evaluated model is active), weather at departure.
 7. Rank on one comparison basis; classify vs reference; generate explanations; optionally save the trip.

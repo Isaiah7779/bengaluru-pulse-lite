@@ -298,6 +298,8 @@ button.small { min-height: 36px; padding: 6px 16px; }
 .rc-meta, .rc-delta { font-size: 12px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
 .badge { font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 3px 9px; background: var(--ivory); color: var(--ink); text-transform: uppercase; letter-spacing: 0.08em; border: 1px solid var(--line); }
 .badge-rec { background: var(--orange); color: var(--ink); border-color: var(--orange); }
+.rc-roles { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px; }
+.badge-role { background: transparent; border-style: dashed; }
 .badge-shortcut { background: #def3e6; color: #17603a; border-color: transparent; }
 .badge-longcut { background: #ece6fb; color: var(--violet); border-color: transparent; }
 .badge-reference { background: var(--ink); color: var(--paper); border-color: var(--ink); }

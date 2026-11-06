@@ -1,6 +1,17 @@
 import { useState } from "react";
 import { BASIS_LABEL, CLASS_LABEL, ago, clock, km, minutes, signedDelta } from "../format";
 
+const ROLE_LABEL = {
+  fastest: "Fastest",
+  shortest_distance: "Shortest distance",
+  least_traffic_delay: "Least traffic delay",
+};
+const ROLE_HINT = {
+  fastest: "Lowest ETA of the routes shown, on the ETA basis stated below",
+  shortest_distance: "Shortest of the routes found; not a guaranteed shortest path",
+  least_traffic_delay: "Lowest TomTom traffic delay of the traffic-timed routes",
+};
+
 function Badge({ kind }) {
   return <span className={`badge badge-${kind}`}>{CLASS_LABEL[kind] || kind}</span>;
 }
@@ -35,6 +46,15 @@ function RouteCard({ route, selected, onSelect }) {
         {route.recommended && <span className="badge badge-rec">Recommended</span>}
         <Badge kind={c.type} />
       </div>
+      {(route.labels || []).length > 0 && (
+        <div className="rc-roles">
+          {route.labels.map((l) => (
+            <span key={l} className="badge badge-role" title={ROLE_HINT[l]}>
+              {ROLE_LABEL[l] || l}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="rc-summary">{route.summary || "Unnamed roads"}</div>
       <div className="rc-meta">
         <span title="How this ETA was obtained">{BASIS_LABEL[route.eta_basis]}</span>

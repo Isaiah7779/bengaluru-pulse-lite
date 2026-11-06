@@ -166,6 +166,8 @@ export type RouteOption = {
   incidents: { id: number; category: string; road?: string | null; source: string; lat: number; lon: number }[];
   explanation: string[];
   summary: string;
+  labels?: string[]; // fastest | shortest_distance | least_traffic_delay
+  shared_max_pct?: number | null;
   geometry: { type: "LineString"; coordinates: [number, number][] };
   steps: { instruction?: string | null; distance_m: number }[];
 };

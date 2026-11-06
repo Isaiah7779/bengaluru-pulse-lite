@@ -12,7 +12,9 @@ a mode whose server is not configured is reported unavailable — never served
 by another graph.
 
 Motorcycle: OSRM ships no motorcycle profile. Motorcycles are routed on the car
-graph and this is disclosed in every response (`profile_status`).
+graph and this is disclosed in every response (`profile_status`). car.lua ignores
+`motorcycle=*`, so the engine removes routes on ways tagged motorcycle=no
+(routing/restrictions.py).
 """
 
 from __future__ import annotations
@@ -41,8 +43,9 @@ PROFILES: Dict[str, VehicleProfile] = {
     ),
     "motorcycle": VehicleProfile(
         "motorcycle", "driving", "car.lua", "car_graph_approximation", "motorcycle", ("toll", "motorway", "ferry"),
-        "No OSRM motorcycle profile exists; routed on the car graph. Two-wheeler-specific "
-        "restrictions (e.g. flyovers or expressways closed to two-wheelers) are not modelled.",
+        "No OSRM motorcycle profile exists; routed on the car graph with car speeds. Routes on OSM ways "
+        "tagged motorcycle=no (e.g. the Bengaluru-Mysuru Expressway) are removed after routing; "
+        "two-wheeler restrictions missing from OpenStreetMap cannot be checked.",
     ),
     "bicycle": VehicleProfile(
         "bicycle", "cycling", "bicycle.lua", "dedicated", None, (),

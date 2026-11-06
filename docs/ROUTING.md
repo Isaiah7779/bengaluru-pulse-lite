@@ -17,8 +17,9 @@
   `503 mode_unavailable` rather than silently using another graph.
 * Measured resources: car graph ≈ 540 MB on disk / ≈ 300 MB RSS; foot ≈ 420 MB /
   ≈ 230 MB; bicycle ≈ 427 MB / ≈ 235 MB. Each build took ~3 min, peak ≈ 0.6 GB RAM.
-* Motorcycle limitation: OSRM has no motorcycle profile; restrictions specific to
-  two-wheelers are not modelled.
+* Motorcycle limitation: OSRM has no motorcycle profile. Routes on roads tagged
+  `motorcycle=no` in OSM (e.g. the Bengaluru-Mysuru Expressway) are removed for
+  motorcycles; other two-wheeler rules and speeds are not modelled.
 
 Measured speeds, Indiranagar → Yeshwanthpur (live OSRM): car 14.7 km / 17.2 min
 (free-flow), foot 14.39 km / 172.9 min (≈ 5 km/h), bicycle 14.83 km / 62.9 min (≈ 14 km/h).
@@ -34,12 +35,19 @@ Measured speeds, Indiranagar → Yeshwanthpur (live OSRM): car 14.7 km / 17.2 mi
    These are the defaults (`OSRM_CORRIDOR_MAX=10`, `OSRM_MAX_CONCURRENCY=5`); the
    free-tier configuration (`render.yaml`) uses 4 corridor requests, one at a time, to
    stay within the public OSRM servers' limits, so it finds fewer alternatives.
-3. Filters: distance ≤ 1.5 × reference + 1 km, duration ≤ 1.5 × reference + 3 min;
-   corridor routes retracing ≥ 120 m of road already used (U-turn spurs at a
-   snapped via-point) are dropped.
-4. Geometry-aware dedup: routes resampled every 50 m; similarity = min of the two
-   directional fractions within 40 m of the other route; ≥ 0.85 ⇒ duplicate.
-5. Up to 5 routes returned (configurable).
+3. More candidates: via-points on the straight origin-destination line and beside the
+   reference route surface shorter-distance paths; via-routes that U-turn in a dead
+   end are re-requested once.
+4. Filters: routes through private or destination-only roads mid-trip (and, for
+   motorcycles, roads tagged `motorcycle=no`) are dropped; distance ≤ 1.5 × reference +
+   1 km, duration ≤ 1.5 × reference + 3 min; U-turn spurs are dropped.
+5. Selection: the reference, the shortest-distance route, then distinct routes
+   fastest-first. A route is a near-duplicate when more than 70 % of its length is
+   shared with a kept route. When only one route remains, the response says why.
+6. Up to 5 routes returned (configurable), labelled `fastest` and `shortest_distance`.
+
+Details (settings, data files, rejection counts):
+[ROUTING_SAFEGUARDS.md](ROUTING_SAFEGUARDS.md), a developer reference.
 
 ## Traffic timing
 
@@ -129,6 +137,10 @@ classifications and no near-duplicate routes. Typical latency with TomTom timing
 
 * OSRM circuit breaker: after a connect failure/timeout a server is treated as
   down for 20 s and requests fail in ~0.3 s instead of waiting on DNS/sockets.
+* Request time limit: route planning inside the app is limited to 20 s
+  (`ROUTE_PLAN_DEADLINE_S`); steps that do not finish in time are skipped and reported,
+  and without any route the API answers 503 `routing_deadline_exceeded`. A sleeping
+  free-tier server's cold start is not covered.
 * TomTom failures, quota exhaustion and mismatches degrade to free-flow with an
   explanation per route; routing never fails because of the traffic provider.
 

@@ -72,7 +72,24 @@ class Settings(BaseSettings):
     # many OSRM calls run at once. Lower both for rate-limited public servers.
     osrm_corridor_max: int = 10
     osrm_max_concurrency: int = 5
+    # Extra via-routes per request that look for shorter (direct-line) and parallel-street
+    # (detour) alternatives. Each is one OSRM call; 0 disables them.
+    osrm_extra_candidates_max: int = Field(4, ge=0, le=12)
+    # Via-routes that turned into a dead-end (U-turn spur) are re-requested through the
+    # point where they left the road, at most this many per request (one OSRM call each).
+    osrm_spur_repair_max: int = Field(3, ge=0, le=12)
+    # End-to-end wall-clock limit of one route request, from the endpoint's first
+    # dependency to the response: OSRM calls get all but the last min(5 s, 25 %), then
+    # TomTom timing, database evidence and weather share the rest (concurrently, in worker
+    # threads). Unfinished work is abandoned and the routes found so far are returned;
+    # without a primary route the request fails with 503 routing_deadline_exceeded.
+    route_plan_deadline_s: float = Field(20.0, gt=0.0, le=120.0)
     max_route_candidates: int = 5
+    # Near-duplicate rule: a candidate is dropped when more than this share of its length
+    # (or of a kept route's length) is shared with a kept route, or when its own,
+    # non-shared part is shorter than route_min_unique_m.
+    route_max_shared_fraction: float = Field(0.70, gt=0.0, le=1.0)
+    route_min_unique_m: float = Field(500.0, ge=0.0)
 
     # -- providers -------------------------------------------------------------
     tomtom_api_key: Optional[SecretStr] = None

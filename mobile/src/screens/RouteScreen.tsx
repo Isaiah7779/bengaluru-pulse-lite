@@ -2,6 +2,12 @@ import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { api, BASIS_LABEL, fmtKm, fmtMin, Place, RouteResponse } from "../api";
+
+const ROLE_LABEL: Record<string, string> = {
+  fastest: "Fastest",
+  shortest_distance: "Shortest distance (of routes found)",
+  least_traffic_delay: "Least traffic delay",
+};
 import MapWebView from "../MapWebView";
 import { Chip, colors, ErrorBox } from "../ui";
 
@@ -142,6 +148,9 @@ export default function RouteScreen({ signedIn }: { signedIn: boolean }) {
                   {r.recommended ? "Recommended · " : ""}{r.classification.type} · {BASIS_LABEL[r.eta_basis]}
                   {r.incidents.length ? ` · ${r.incidents.length} incident(s)` : ""}
                 </Text>
+                {(r.labels || []).length > 0 && (
+                  <Text style={styles.cardMeta}>{(r.labels || []).map((l) => ROLE_LABEL[l] || l).join(" · ")}</Text>
+                )}
                 <Text numberOfLines={1} style={styles.muted}>{r.summary}</Text>
               </Pressable>
             ))}

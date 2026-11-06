@@ -1,40 +1,40 @@
 {
- "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+ "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
  "documents": [
   {
    "source_type": "doc",
    "source_ref": "docs/ROUTING.md",
    "title": "Routing",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
-   "content_hash": "e8e1dcc6342fca77429466dbc1f1ba2de343c37de0c1c5ed02c8e0fc73ea72f3",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "content_hash": "087283ef6fd8c40b3cbb0c48d0c4e48acbaf62a4d9de0b1e060c7c2d050d50f5",
    "visibility": "user",
    "chunks": [
     {
      "ordinal": 0,
      "heading_path": "Routing › Road graphs and vehicle modes",
-     "body": "| Mode | Graph | Lua profile | Status | Traffic applied |\n|---|---|---|---|---|\n| car | `data/osm/bengaluru.osrm` | car.lua | dedicated | TomTom (`travelMode=car`) |\n| motorcycle | car graph | car.lua | **car-graph approximation** (disclosed in every response) | TomTom (`travelMode=motorcycle`) |\n| bicycle | `data/osrm-bicycle/` | bicycle.lua | dedicated | not applicable |\n| walk | `data/osrm-foot/` | foot.lua | dedicated | not applicable |\n\n* Source: OpenStreetMap via Geofabrik *India – Southern Zone* (snapshot 2026‑09‑26),\n  cut to lon 77.00–78.00, lat 12.45–13.42 (`infrastructure/osrm/prepare_graphs.sh`).\n* **Why separate servers:** OSRM ignores the profile name in the URL. Asking the car\n  server for `/route/v1/foot/…` returned the identical car route (verified during the\n  audit). Modes therefore map to servers; a mode without its server returns\n  `503 mode_unavailable` rather than silently using another graph.\n* Measured resources: car graph ≈ 540 MB on disk / ≈ 300 MB RSS; foot ≈ 420 MB /\n  ≈ 230 MB; bicycle ≈ 427 MB / ≈ 235 MB. Each build took ~3 min, peak ≈ 0.6 GB RAM.\n* Motorcycle limitation: OSRM has no motorcycle profile; restrictions specific to\n  two-wheelers are not modelled.\n\nMeasured speeds, Indiranagar → Yeshwanthpur (live OSRM): car 14.7 km / 17.2 min\n(free-flow), foot 14.39 km / 172.9 min (≈ 5 km/h), bicycle 14.83 km / 62.9 min (≈ 14 km/h).",
+     "body": "| Mode | Graph | Lua profile | Status | Traffic applied |\n|---|---|---|---|---|\n| car | `data/osm/bengaluru.osrm` | car.lua | dedicated | TomTom (`travelMode=car`) |\n| motorcycle | car graph | car.lua | **car-graph approximation** (disclosed in every response) | TomTom (`travelMode=motorcycle`) |\n| bicycle | `data/osrm-bicycle/` | bicycle.lua | dedicated | not applicable |\n| walk | `data/osrm-foot/` | foot.lua | dedicated | not applicable |\n\n* Source: OpenStreetMap via Geofabrik *India – Southern Zone* (snapshot 2026‑09‑26),\n  cut to lon 77.00–78.00, lat 12.45–13.42 (`infrastructure/osrm/prepare_graphs.sh`).\n* **Why separate servers:** OSRM ignores the profile name in the URL. Asking the car\n  server for `/route/v1/foot/…` returned the identical car route (verified during the\n  audit). Modes therefore map to servers; a mode without its server returns\n  `503 mode_unavailable` rather than silently using another graph.\n* Measured resources: car graph ≈ 540 MB on disk / ≈ 300 MB RSS; foot ≈ 420 MB /\n  ≈ 230 MB; bicycle ≈ 427 MB / ≈ 235 MB. Each build took ~3 min, peak ≈ 0.6 GB RAM.\n* Motorcycle limitation: OSRM has no motorcycle profile. Routes on roads tagged\n  `motorcycle=no` in OSM (e.g. the Bengaluru-Mysuru Expressway) are removed for\n  motorcycles; other two-wheeler rules and speeds are not modelled.\n\nMeasured speeds, Indiranagar → Yeshwanthpur (live OSRM): car 14.7 km / 17.2 min\n(free-flow), foot 14.39 km / 172.9 min (≈ 5 km/h), bicycle 14.83 km / 62.9 min (≈ 14 km/h).",
      "measured_on": "2026-09-26",
-     "content_hash": "44704c899b41b670d69db77f986cdc1b190f4be28731da3e4205c4a24a74495e",
+     "content_hash": "125dc6f0cbbed492713ea0706a402fd02cb5ce28dee058254685683e53e1d5ec",
      "meta": {
       "headings": [
        "Road graphs and vehicle modes"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
      "ordinal": 1,
      "heading_path": "Routing › Candidate generation",
-     "body": "1. OSRM primary route with `alternatives=3` → **reference route** (OSRM's default\n   free-flow fastest route for the mode) plus native alternatives.\n2. Corridor routes: via-points placed perpendicular to the straight line at\n   7 / 14 / 24 / 34 % of the trip length (clamped 300 m – 7 km) on both sides\n   (two via-points at 30 % and 70 %), plus two single mid-points at 18 %.\n   10 requests, 5 concurrently. Trips under 400 m skip corridors.\n   These are the defaults (`OSRM_CORRIDOR_MAX=10`, `OSRM_MAX_CONCURRENCY=5`); the\n   free-tier configuration (`render.yaml`) uses 4 corridor requests, one at a time, to\n   stay within the public OSRM servers' limits, so it finds fewer alternatives.\n3. Filters: distance ≤ 1.5 × reference + 1 km, duration ≤ 1.5 × reference + 3 min;\n   corridor routes retracing ≥ 120 m of road already used (U-turn spurs at a\n   snapped via-point) are dropped.\n4. Geometry-aware dedup: routes resampled every 50 m; similarity = min of the two\n   directional fractions within 40 m of the other route; ≥ 0.85 ⇒ duplicate.\n5. Up to 5 routes returned (configurable).",
+     "body": "1. OSRM primary route with `alternatives=3` → **reference route** (OSRM's default\n   free-flow fastest route for the mode) plus native alternatives.\n2. Corridor routes: via-points placed perpendicular to the straight line at\n   7 / 14 / 24 / 34 % of the trip length (clamped 300 m – 7 km) on both sides\n   (two via-points at 30 % and 70 %), plus two single mid-points at 18 %.\n   10 requests, 5 concurrently. Trips under 400 m skip corridors.\n   These are the defaults (`OSRM_CORRIDOR_MAX=10`, `OSRM_MAX_CONCURRENCY=5`); the\n   free-tier configuration (`render.yaml`) uses 4 corridor requests, one at a time, to\n   stay within the public OSRM servers' limits, so it finds fewer alternatives.\n3. More candidates: via-points on the straight origin-destination line and beside the\n   reference route surface shorter-distance paths; via-routes that U-turn in a dead\n   end are re-requested once.\n4. Filters: routes through private or destination-only roads mid-trip (and, for\n   motorcycles, roads tagged `motorcycle=no`) are dropped; distance ≤ 1.5 × reference +\n   1 km, duration ≤ 1.5 × reference + 3 min; U-turn spurs are dropped.\n5. Selection: the reference, the shortest-distance route, then distinct routes\n   fastest-first. A route is a near-duplicate when more than 70 % of its length is\n   shared with a kept route. When only one route remains, the response says why.\n6. Up to 5 routes returned (configurable), labelled `fastest` and `shortest_distance`.\n\nDetails (settings, data files, rejection counts):\n[ROUTING_SAFEGUARDS.md](ROUTING_SAFEGUARDS.md), a developer reference.",
      "measured_on": null,
-     "content_hash": "7f3a4452e4a8749fdf5ff4d1428080635ee5708f888f79b74361442222e94db7",
+     "content_hash": "8627416317efc78f606d3563cc1f65c6ca4635b5da3226e4cd45e23d1ee4284f",
      "meta": {
       "headings": [
        "Candidate generation"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -48,7 +48,7 @@
        "Traffic timing"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -62,7 +62,7 @@
        "Comparison basis and preferences"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -76,7 +76,7 @@
        "Shortcut / longcut classification (`routing/classification.py`)"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -90,7 +90,7 @@
        "Evidence attached to each route"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -104,21 +104,21 @@
        "Benchmarks (live OSRM, `tests/test_integration_live.py`)"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
      "ordinal": 7,
      "heading_path": "Routing › Resilience",
-     "body": "* OSRM circuit breaker: after a connect failure/timeout a server is treated as\n  down for 20 s and requests fail in ~0.3 s instead of waiting on DNS/sockets.\n* TomTom failures, quota exhaustion and mismatches degrade to free-flow with an\n  explanation per route; routing never fails because of the traffic provider.",
+     "body": "* OSRM circuit breaker: after a connect failure/timeout a server is treated as\n  down for 20 s and requests fail in ~0.3 s instead of waiting on DNS/sockets.\n* Request time limit: route planning inside the app is limited to 20 s\n  (`ROUTE_PLAN_DEADLINE_S`); steps that do not finish in time are skipped and reported,\n  and without any route the API answers 503 `routing_deadline_exceeded`. A sleeping\n  free-tier server's cold start is not covered.\n* TomTom failures, quota exhaustion and mismatches degrade to free-flow with an\n  explanation per route; routing never fails because of the traffic provider.",
      "measured_on": null,
-     "content_hash": "99915add08e1d5a2edbe3092db8e4ecc6dd903789fab20428e707d84a24bc564",
+     "content_hash": "d6ed0dcea1d8f38b22f163a3ae598f4eefc4a109465964bd18a308331d2502c6",
      "meta": {
       "headings": [
        "Resilience"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -132,7 +132,7 @@
        "Known limitations"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -141,7 +141,7 @@
    "source_type": "doc",
    "source_ref": "docs/TRAFFIC.md",
    "title": "Traffic, weather and incident data",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
    "content_hash": "1e616e21b70ea676841ed6e0b795e84b40e3e00f173e2d188fd3b451008ab37d",
    "visibility": "user",
    "chunks": [
@@ -156,7 +156,7 @@
        "Sources"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -170,7 +170,7 @@
        "Quota budget (TomTom free tier: 2,500 non-tile requests/day, verified 2026-10-22)"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -184,7 +184,7 @@
        "Ingestion pipeline"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -198,7 +198,7 @@
        "Read APIs"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -212,7 +212,7 @@
        "Data collected so far (measured 2026-10-22 05:35 UTC)"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -226,7 +226,7 @@
        "Terms and attribution"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -235,7 +235,7 @@
    "source_type": "doc",
    "source_ref": "docs/ML_PIPELINE.md",
    "title": "Forecasting pipeline",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
    "content_hash": "dfa193e67d04ce3f11582e23fdec6a1a8b0df678f9e5b9c953da6d08702bb88f",
    "visibility": "user",
    "chunks": [
@@ -248,7 +248,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -262,7 +262,7 @@
        "Method"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -276,7 +276,7 @@
        "Track A — public daily dataset (research)"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -290,7 +290,7 @@
        "Track A — public daily dataset (research)"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -304,7 +304,7 @@
        "Track B — collected TomTom observations (operational)"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -318,7 +318,7 @@
        "Prospective evaluation (M1, running)"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -332,7 +332,7 @@
        "Graph neural networks"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -341,8 +341,8 @@
    "source_type": "doc",
    "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
    "title": "Results and limitations",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
-   "content_hash": "dc85b6d4a2c9b61f81921b70842086c7733fb196a28bea51d7a0152480dc1c28",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "content_hash": "b83e7f374f743290ab50f078bef8d3a4adab8dbcece1a54fd41e47c10be4ae2c",
    "visibility": "user",
    "chunks": [
     {
@@ -354,7 +354,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -368,21 +368,21 @@
        "1. What is completed versus validated"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
      "ordinal": 2,
      "heading_path": "Results and limitations › 2. Routing",
-     "body": "| Trip | Reference distance | Result |\n|---|---|---|\n| Whitefield → Marathahalli | 7.6 km | pass [test] |\n| Whitefield → Electronic City | 24.7 km | pass [test] |\n| Indiranagar → Yeshwanthpur | 14.7 km | pass [test] |\n| Airport (KIA) → Whitefield | 38.0 km | pass [test] |\n| Koramangala → Hebbal | 15.3 km | pass [test] |\n\n* Candidates: OSRM's native alternatives gave 0–2 per trip; the engine considered\n  10–13 candidates per request and returned up to 5 routes with pairwise geometric\n  similarity < 0.85 [test, live].\n* Mode realism (Indiranagar → Yeshwanthpur, free-flow): car 51 km/h, bicycle 14.1 km/h,\n  walk 5.0 km/h [live].\n* Avoid tolls: Electronic City → Kengeri via NICE Road 27.47 km / 22.7 min;\n  avoiding tolls 26.42 km / 31.6 min [live].\n* Traffic-aware labels [live, 22 Oct 2026, TomTom live traffic]: Whitefield → Electronic\n  City — **shortcut** 21.4 km / 66 min vs reference 24.7 km / 77 min; **longcut**\n  26.4 km / 71 min. Koramangala → Hebbal — reference 16.3 km at 62 min with 9.1 min\n  TomTom delay (free-flow 41.2 min, TomTom typical 58.2 min). These are single\n  observations at one moment; traffic changes, so labels on another day may differ.\n* Latency: 2–3 s per request with TomTom timing, 1.4–2.3 s without [live, local laptop].",
+     "body": "| Trip | Reference distance | Result |\n|---|---|---|\n| Whitefield → Marathahalli | 7.6 km | pass [test] |\n| Whitefield → Electronic City | 24.7 km | pass [test] |\n| Indiranagar → Yeshwanthpur | 14.7 km | pass [test] |\n| Airport (KIA) → Whitefield | 38.0 km | pass [test] |\n| Koramangala → Hebbal | 15.3 km | pass [test] |\n\n* Candidates: OSRM's native alternatives gave 0–2 per trip; the engine considered\n  10–13 candidates per request and returned up to 5 routes [test, live]. That V2\n  measurement used the original, looser duplicate rule; since November 2026 a route is a near-duplicate when more than 70 % of its length is shared\n  with a kept route, and the audit trips are re-checked in\n  `tests/test_routing_trips_live.py` (see ROUTING.md, \"Candidate generation\").\n* Mode realism (Indiranagar → Yeshwanthpur, free-flow): car 51 km/h, bicycle 14.1 km/h,\n  walk 5.0 km/h [live].\n* Avoid tolls: Electronic City → Kengeri via NICE Road 27.47 km / 22.7 min;\n  avoiding tolls 26.42 km / 31.6 min [live].\n* Traffic-aware labels [live, 22 Oct 2026, TomTom live traffic]: Whitefield → Electronic\n  City — **shortcut** 21.4 km / 66 min vs reference 24.7 km / 77 min; **longcut**\n  26.4 km / 71 min. Koramangala → Hebbal — reference 16.3 km at 62 min with 9.1 min\n  TomTom delay (free-flow 41.2 min, TomTom typical 58.2 min). These are single\n  observations at one moment; traffic changes, so labels on another day may differ.\n* Latency: 2–3 s per request with TomTom timing, 1.4–2.3 s without [live, local laptop].",
      "measured_on": "2026-10-22",
-     "content_hash": "1ced1ef71b21a8f1c6606f3ce6603cea5c8143e9fbe79eeda03a6af0c8aff92b",
+     "content_hash": "c1448e6b18deb7df3274fc6b13048f11837dbeb1b5bf32bcc416bb1b3b7212f3",
      "meta": {
       "headings": [
        "2. Routing"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -396,7 +396,7 @@
        "3. Data collected (own observations) [live]"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -411,7 +411,7 @@
        "4.1 Offline, public daily dataset [offline]"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -426,7 +426,7 @@
        "4.2 Own observations"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -440,7 +440,7 @@
        "5. Limitations"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -454,7 +454,7 @@
        "6. Next steps"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -463,7 +463,7 @@
    "source_type": "doc",
    "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
    "title": "Research milestone: validated short-horizon forecasting",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
    "content_hash": "826de9515fb2448951ead93a2cdf8cabcde4e73d4dbb8e5f32e5a062b5d8fa78",
    "visibility": "user",
    "chunks": [
@@ -476,7 +476,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -490,7 +490,7 @@
        "Question"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -504,7 +504,7 @@
        "Current state (inspected)"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -518,7 +518,7 @@
        "Definitions"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -532,7 +532,7 @@
        "Milestones"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -546,7 +546,7 @@
        "Next implementation steps (small, testable)"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -560,7 +560,7 @@
        "Threats to validity"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -574,7 +574,7 @@
        "What must not happen"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -583,7 +583,7 @@
    "source_type": "doc",
    "source_ref": "docs/USER_GUIDE.md",
    "title": "User guide",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
    "content_hash": "24a89bc6c845f3f42ae370a5b6b5fd148b5475a7c264423691fe11c066d97ae2",
    "visibility": "user",
    "chunks": [
@@ -596,7 +596,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -610,7 +610,7 @@
        "1. Plan a route (sign-in required)"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -624,7 +624,7 @@
        "2. Read the results"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -638,7 +638,7 @@
        "3. Traffic page"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -652,7 +652,7 @@
        "4. Create an account and sign in"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -666,7 +666,7 @@
        "5. Administrators"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -680,7 +680,7 @@
        "6. On phones, tablets and other computers"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -689,7 +689,7 @@
    "source_type": "doc",
    "source_ref": "docs/SECURITY.md",
    "title": "Security",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
    "content_hash": "10bc39f8a4c5746f6e370f4661622c02cebd3e1575a0ff81d75c0cb5fcb9fb64",
    "visibility": "user",
    "chunks": [
@@ -704,7 +704,7 @@
        "Authentication"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -718,7 +718,7 @@
        "Authorization (enforced in the backend)"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -732,7 +732,7 @@
        "Secrets"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -746,7 +746,7 @@
        "Transport and headers"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -760,7 +760,7 @@
        "Input handling and abuse limits"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -774,7 +774,7 @@
        "Known gaps (not implemented)"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -783,7 +783,7 @@
    "source_type": "doc",
    "source_ref": "docs/DATABASE.md",
    "title": "Database",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
    "content_hash": "dc23fd2c051fd0b292b7e5e14634dd5e8dbbdb46fd1ae03b8066db567b950b2a",
    "visibility": "user",
    "chunks": [
@@ -796,7 +796,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -810,7 +810,7 @@
        "Tables"
       ],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -824,7 +824,7 @@
        "Spatial and time indexes"
       ],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -838,7 +838,7 @@
        "Retention and privacy (daily job, `traffic/maintenance.py`)"
       ],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -852,7 +852,7 @@
        "Persistence"
       ],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -866,7 +866,7 @@
        "Rebuilding the gazetteer"
       ],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -875,22 +875,22 @@
    "source_type": "doc",
    "source_ref": "docs/ARCHITECTURE.md",
    "title": "Architecture",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
-   "content_hash": "4f127f80e98f09cae6ec944a3355dd8c014d3e014d0892df991a25f646a64733",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "content_hash": "56090ef7c2128058dc0b63dc7330c765882fdc305e63d64b8c91f16dcb0ab837",
    "visibility": "user",
    "chunks": [
     {
      "ordinal": 0,
      "heading_path": "Architecture › System overview",
-     "body": "```mermaid\nflowchart LR\n  subgraph Clients\n    W[React web app<br/>CRA + react-leaflet]\n    M[Expo mobile app<br/>RN + Leaflet WebView]\n  end\n  subgraph Edge\n    C[Caddy<br/>HTTPS, prod only]\n    N[nginx<br/>static build + /api proxy]\n  end\n  subgraph API[\"FastAPI backend (uvicorn)\"]\n    R[routing.engine]\n    G[geocoding.service]\n    A[auth + RBAC]\n    CM[community.service]\n    F[forecasting.predictor]\n    H[health]\n  end\n  subgraph Data\n    PG[(PostgreSQL 16 + PostGIS 3.4)]\n    O1[OSRM car.lua]\n    O2[OSRM foot.lua]\n    O3[OSRM bicycle.lua]\n  end\n  COL[collector process<br/>traffic.collector]\n  TT[(TomTom APIs)]\n  OM[(Open-Meteo)]\n  PH[(Photon, fallback)]\n\n  W --> C --> N --> API\n  M --> C\n  R --> O1 & O2 & O3\n  R -->|route timing| TT\n  R --> PG\n  G --> PG\n  G -.-> PH\n  A --> PG\n  CM --> O1 & O2 & O3\n  CM --> PG\n  F --> PG\n  COL -->|flow, incidents| TT\n  COL -->|weather| OM\n  COL --> PG\n```",
+     "body": "```mermaid\nflowchart LR\n  subgraph Clients\n    W[React web app<br/>CRA + react-leaflet]\n    M[Expo mobile app<br/>RN + Leaflet WebView]\n  end\n  subgraph Edge\n    C[Caddy<br/>HTTPS, prod only]\n    N[nginx<br/>static build + /api proxy]\n  end\n  subgraph API[\"FastAPI backend (uvicorn)\"]\n    R[routing.engine]\n    G[geocoding.service]\n    A[auth + RBAC]\n    CM[community.service]\n    F[forecasting.predictor]\n    H[health]\n  end\n  subgraph Data\n    PG[(PostgreSQL 16 + PostGIS 3.4)]\n    O1[OSRM car.lua]\n    O2[OSRM foot.lua]\n    O3[OSRM bicycle.lua]\n  end\n  COL[collector process<br/>traffic.collector]\n  TT[(TomTom APIs)]\n  OM[(Open-Meteo)]\n  PH[(Photon address search)]\n\n  W --> C --> N --> API\n  M --> C\n  R --> O1 & O2 & O3\n  R -->|route timing| TT\n  R --> PG\n  G --> PG\n  G -.-> PH\n  A --> PG\n  CM --> O1 & O2 & O3\n  CM --> PG\n  F --> PG\n  COL -->|flow, incidents| TT\n  COL -->|weather| OM\n  COL --> PG\n```",
      "measured_on": null,
-     "content_hash": "9b7e273a689ed11aac841da5f8a8140cf89ed0e6ce75f9d319bbf7aac95d4575",
+     "content_hash": "09d9ec80bd67851945ea158b1547a5a8eabe85f065277045e40377ddabc0aa48",
      "meta": {
       "headings": [
        "System overview"
       ],
       "source_ref": "docs/ARCHITECTURE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -904,21 +904,21 @@
        "Components"
       ],
       "source_ref": "docs/ARCHITECTURE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
      "ordinal": 2,
      "heading_path": "Architecture › Request lifecycle: `POST /v1/routes`",
-     "body": "0. `app_access` resolves the signed-in user; without one the request gets `401` (`API_AUTH_REQUIRED=true`, the default).\n1. Validate the body (`RouteRequestV2`); resolve the vehicle → OSRM server for that profile (503 `mode_unavailable` if absent; never substituted).\n2. OSRM primary route (+ native alternatives) = **reference route**.\n3. Up to 10 corridor via-point routes, 5 at a time (defaults; `OSRM_CORRIDOR_MAX`, `OSRM_MAX_CONCURRENCY`), snapped by OSRM.\n4. Filter: detour limits, U-turn spurs; geometric dedup (symmetric overlap ≥ 0.85).\n5. TomTom timing per candidate (supportingPoints; departAt for future); reject if length differs > 8 %.\n6. Evidence: incidents *on* the route, monitored-point observations (+ forecast if an evaluated model is active), weather at departure.\n7. Rank on one comparison basis; classify vs reference; generate explanations; optionally save the trip.",
+     "body": "0. `app_access` resolves the signed-in user; without one the request gets `401` (`API_AUTH_REQUIRED=true`, the default).\n1. Validate the body (`RouteRequestV2`); resolve the vehicle → OSRM server for that profile (503 `mode_unavailable` if absent; never substituted).\n2. OSRM primary route (+ native alternatives) = **reference route**.\n3. Up to 10 corridor via-point routes, 5 at a time (defaults; `OSRM_CORRIDOR_MAX`, `OSRM_MAX_CONCURRENCY`), plus 4 straight-line/detour via-routes and up to 3 spur repairs, all within one planning deadline (`ROUTE_PLAN_DEADLINE_S`, 20 s), snapped by OSRM.\n4. Filter: private/destination-only roads mid-trip, motorcycle=no roads for motorcycles, detour limits, U-turn spurs; keep the shortest-distance route, then drop near-duplicates (more than 70 % shared length). Details in [ROUTING.md](ROUTING.md).\n5. TomTom timing per candidate (supportingPoints; departAt for future); reject if length differs > 8 %.\n6. Evidence: incidents *on* the route, monitored-point observations (+ forecast if an evaluated model is active), weather at departure.\n7. Rank on one comparison basis; classify vs reference; generate explanations; optionally save the trip.",
      "measured_on": null,
-     "content_hash": "f6017419cd6b18493ed11e5836a37115f43fdd63f5089aa9d88b713c3ded5cc5",
+     "content_hash": "023034cf6df796effeaabcedac06b632aa33dbe4a8f3a4e96c6339aee42c95f4",
      "meta": {
       "headings": [
        "Request lifecycle: `POST /v1/routes`"
       ],
       "source_ref": "docs/ARCHITECTURE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -932,7 +932,7 @@
        "Processes and deployment units"
       ],
       "source_ref": "docs/ARCHITECTURE.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -941,7 +941,7 @@
    "source_type": "doc",
    "source_ref": "docs/DEPLOY_FREE_TIER.md",
    "title": "Free-tier deployment: Render (API + database) and Vercel (web apps)",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
    "content_hash": "9baa591e8581699bceabad5f63fabb5c47676bd2961bef0654b3e7e9d4d54c65",
    "visibility": "user",
    "chunks": [
@@ -954,7 +954,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -968,7 +968,7 @@
        "Free-tier limits you will notice"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -982,7 +982,7 @@
        "1. Push the code"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -996,7 +996,7 @@
        "2. Backend and database on Render"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -1011,7 +1011,7 @@
        "Create the first admin"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -1025,7 +1025,7 @@
        "3. Web apps on Vercel"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -1039,7 +1039,7 @@
        "4. Connect the two"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -1053,7 +1053,7 @@
        "5. Collector (optional, needs a TomTom key for traffic)"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -1067,7 +1067,7 @@
        "6. Checks before calling it deployed"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -1076,7 +1076,7 @@
    "source_type": "eval_report",
    "source_ref": "backend/evaluation/v2/segment-speed-ratio.json",
    "title": "Evaluation report segment-speed-ratio",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
    "content_hash": "bc9a2d672e5fba63b370b83cc4c66ba3f658bd6f8936663a13cac0e89d63f3ca",
    "visibility": "user",
    "chunks": [
@@ -1091,7 +1091,7 @@
        "Summary"
       ],
       "source_ref": "backend/evaluation/v2/segment-speed-ratio.json",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]
@@ -1100,7 +1100,7 @@
    "source_type": "eval_report",
    "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
    "title": "Evaluation report research-daily-congestion",
-   "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a",
+   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
    "content_hash": "0645c4fea57c4ffdecd3e687219ef47128006d3e05a1a2814fdce535be3495c0",
    "visibility": "user",
    "chunks": [
@@ -1115,7 +1115,7 @@
        "Summary"
       ],
       "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -1129,7 +1129,7 @@
        "Horizon 1d"
       ],
       "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -1143,7 +1143,7 @@
        "Horizon 7d"
       ],
       "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     },
     {
@@ -1157,7 +1157,7 @@
        "Legacy V1 check"
       ],
       "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
-      "commit_sha": "7245348d4f49a40c49c391f42f35b5218887125a"
+      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
      }
     }
    ]

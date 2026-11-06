@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Dict, List, Optional, Sequence
 
 from providers.tomtom import ProviderError, RouteTiming
@@ -40,15 +41,23 @@ def osrm_route(coords, speed_mps=10.0, duration=None):
 class FakeOSRM:
     """Returns a scripted primary response and scripted corridor routes."""
 
-    def __init__(self, primary_routes: Sequence[dict], corridor_routes: Sequence[Optional[dict]] = (), fail: bool = False):
+    def __init__(self, primary_routes: Sequence[dict], corridor_routes: Sequence[Optional[dict]] = (), fail: bool = False,
+                 primary_delay_s: float = 0.0, via_delay_s: float = 0.0):
         self.primary_routes = list(primary_routes)
         self.corridor_routes = list(corridor_routes)
         self.fail = fail
+        self.primary_delay_s = primary_delay_s  # simulated slow server (seconds per call)
+        self.via_delay_s = via_delay_s
         self.calls: List[dict] = []
+        self.completed = 0
         self._corridor_index = 0
 
     async def route_points(self, points, *, profile="driving", alternatives=0, steps=True, exclude=()):
         self.calls.append({"points": list(points), "profile": profile, "exclude": list(exclude)})
+        delay = self.primary_delay_s if len(points) == 2 else self.via_delay_s
+        if delay:
+            await asyncio.sleep(delay)
+        self.completed += 1
         if self.fail:
             raise OSRMError("Routing engine unreachable (ConnectError)")
         if len(points) == 2:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import uuid
 
 from fastapi import FastAPI, Request
@@ -66,6 +67,9 @@ def install_error_handlers(app: FastAPI) -> None:
         supplied = request.headers.get("x-request-id") or ""
         request_id = supplied if _REQUEST_ID.fullmatch(supplied) else uuid.uuid4().hex[:16]
         request.state.request_id = request_id
+        # Arrival time: route planning measures its end-to-end deadline from here, so
+        # router-level sign-in checks count against it too.
+        request.state.received_at = time.monotonic()
         response = await call_next(request)
         response.headers["x-request-id"] = request_id
         return response

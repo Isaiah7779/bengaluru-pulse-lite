@@ -209,6 +209,22 @@ test("route results show basis, classification, evidence and sources", () => {
   expect(screen.getByText("Head north")).toBeInTheDocument();
 });
 
+test("route cards show fastest and shortest-distance roles; older responses without labels still render", () => {
+  const labelled = {
+    ...FIXTURE,
+    routes: [
+      { ...FIXTURE.routes[0], labels: ["fastest"] },
+      { ...FIXTURE.routes[1], labels: ["shortest_distance"] },
+    ],
+  };
+  const { unmount } = render(<RouteResults result={labelled} selectedId="r1" onSelect={() => {}} />);
+  expect(screen.getByText("Fastest")).toBeInTheDocument();
+  expect(screen.getByText("Shortest distance")).toHaveAttribute("title", expect.stringMatching(/not a guaranteed shortest path/));
+  unmount();
+  render(<RouteResults result={FIXTURE} selectedId="r1" onSelect={() => {}} />);
+  expect(screen.queryByText("Shortest distance")).not.toBeInTheDocument();
+});
+
 test("GPX parsing keeps only timestamped points", () => {
   const gpx = `<?xml version="1.0"?><gpx><trk><trkseg>
     <trkpt lat="12.9" lon="77.6"><time>2026-10-22T03:00:00Z</time></trkpt>

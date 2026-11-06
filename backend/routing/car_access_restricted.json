@@ -1,0 +1,35 @@
+{
+ "source": "OpenStreetMap contributors (ODbL), extracted from bengaluru.osm.pbf",
+ "ways": 43660,
+ "segments": 185009,
+ "values": [
+  "customers",
+  "delivery",
+  "destination",
+  "permit",
+  "private",
+  "residents"
+ ],
+ "ways_by_access": {
+  "customers": 83,
+  "destination": 95,
+  "permit": 4,
+  "private": 43478
+ },
+ "ways_by_highway": {
+  "living_street": 28,
+  "residential": 16981,
+  "secondary": 2,
+  "secondary_link": 1,
+  "service": 26408,
+  "tertiary": 18,
+  "tertiary_link": 5,
+  "unclassified": 217
+ },
+ "access_keys_in_order": [
+  "motorcar",
+  "motor_vehicle",
+  "vehicle",
+  "access"
+ ]
+}

@@ -99,6 +99,26 @@ def backtrack_length_m(coords: Sequence[Coord], tolerance_m: float = 15.0, spaci
     return retraced * spacing_m
 
 
+def spur_entry_points(coords: Sequence[Coord], tolerance_m: float = 15.0, spacing_m: float = 25.0,
+                      min_gap_m: float = 200.0) -> List[Tuple[float, float]]:
+    """Where a route leaves its path into a U-turn spur, as (lon, lat), in route order.
+
+    A via-point snapped onto a dead-end or the far carriageway makes OSRM drive in
+    and back out. The point just before each retraced stretch lies on the road the
+    route should have stayed on, so re-routing through it removes the spur while
+    OSRM still enforces one-ways and turn restrictions.
+    """
+
+    samples = resample(coords, spacing_m)
+    index = PointIndex(samples, cell_m=25.0)
+    retraced = [any(q[2] - p[2] >= min_gap_m for q in index.neighbours(p[0], p[1], tolerance_m)) for p in samples]
+    return [
+        (samples[max(0, i - 1)][0], samples[max(0, i - 1)][1])
+        for i, hit in enumerate(retraced)
+        if hit and (i == 0 or not retraced[i - 1])
+    ]
+
+
 def min_distance_to_route_m(point: Coord, route_samples_index: PointIndex, max_radius_m: float) -> float:
     best = math.inf
     for q in route_samples_index.neighbours(point[0], point[1], max_radius_m):

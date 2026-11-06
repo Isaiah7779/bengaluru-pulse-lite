@@ -93,6 +93,18 @@ def explain(opt, cand, options, pref: RoutePreference, basis: str) -> List[str]:
         lines.append(_recommend_reason(opt, comparable, pref, basis))
     eta_line = f"ETA {_min(opt.eta_s)} ({BASIS_LABEL.get(opt.eta_basis, opt.eta_basis)}), {opt.distance_m / 1000:.1f} km."
     lines.append(eta_line)
+    labels = getattr(opt, "labels", None) or []
+    if "fastest" in labels and len(options) > 1:
+        lines.append(f"Fastest of the {len(options)} routes shown ({BASIS_LABEL.get(opt.eta_basis, opt.eta_basis)}).")
+    if "shortest_distance" in labels and len(options) > 1:
+        lines.append(
+            f"Shortest distance of the {len(options)} routes shown. The routing graph optimises travel time, so this is "
+            "the shortest route found among the candidates examined, not a guaranteed shortest path."
+        )
+    if "least_traffic_delay" in labels:
+        lines.append("Least TomTom traffic delay of the traffic-timed routes shown.")
+    if not opt.is_reference and getattr(opt, "shared_max_pct", None):
+        lines.append(f"Up to {opt.shared_max_pct:.0f}% of this route is shared with another route shown.")
     if opt.traffic:
         t = opt.traffic
         lines.append(

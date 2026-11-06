@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.deps import optional_user, settings_dep
-from core.errors import AppError
+from core.errors import AppError, UpstreamUnavailable
 from core.settings import Settings
 from db.models import Trip, User
 from db.session import get_db
@@ -25,6 +28,10 @@ from routing.schemas import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["routing"])
+
+# The engine itself finishes ASSEMBLY_MARGIN_S before the deadline; this outer limit (the
+# deadline itself) only catches a bug or an unexpectedly slow CPU step.
+SAFETY_NET_S = 0.0
 
 _engine: Optional[RoutingEngine] = None
 
@@ -50,14 +57,51 @@ def vehicles(settings: Settings = Depends(settings_dep)):
     return {"vehicles": all_vehicle_metadata(settings)}
 
 
+def request_deadline(request: Request, settings: Settings = Depends(settings_dep)) -> float:
+    """Request deadline, measured from arrival (set by the request-ID middleware, before sign-in)."""
+
+    received = getattr(request.state, "received_at", None) or time.monotonic()
+    return received + settings.route_plan_deadline_s
+
+
+async def _plan_within(engine: RoutingEngine, body: RouteRequestV2, deadline: float) -> RouteResponseV2:
+    """Run the engine under the request deadline; the engine bounds itself, this is the safety net."""
+
+    try:
+        return await asyncio.wait_for(engine.plan(body, deadline_at=deadline),
+                                      timeout=max(0.1, deadline - time.monotonic() + SAFETY_NET_S))
+    except asyncio.TimeoutError as exc:
+        raise UpstreamUnavailable(
+            "Route planning did not finish within the request time limit. This is usually temporary; please try again.",
+            code="routing_deadline_exceeded",
+        ) from exc
+
+
+def _save_trip(db: Session, trip: Trip, deadline: float) -> Optional[str]:
+    """Insert the trip with a statement timeout bounded by the request deadline; returns a warning on failure."""
+
+    try:
+        if db.get_bind().dialect.name == "postgresql":
+            seconds = max(0.5, deadline - time.monotonic())
+            db.execute(text(f"SET LOCAL statement_timeout = {int(seconds * 1000)}"))
+        db.add(trip)
+        db.commit()
+        return None
+    except Exception:
+        logger.exception("Saving the trip failed")
+        db.rollback()
+        return "The route was planned but the trip could not be saved to your history in time; please try again."
+
+
 @router.post("/v1/routes", response_model=RouteResponseV2)
 async def plan_route(
     body: RouteRequestV2,
+    deadline: float = Depends(request_deadline),
     engine: RoutingEngine = Depends(get_engine),
     user: Optional[User] = Depends(optional_user),
     db: Session = Depends(get_db),
 ):
-    result = await engine.plan(body)
+    result = await _plan_within(engine, body, deadline)
     if body.save_trip:
         if user is None:
             raise AppError("Sign in to save trips to your history", code="auth_required", status_code=401)
@@ -83,24 +127,29 @@ async def plan_route(
                 "routes_compared": len(result.routes),
             },
         )
-        db.add(trip)
-        db.commit()
-        result.trip_id = trip.id
+        problem = _save_trip(db, trip, deadline)
+        if problem:
+            result.warnings.append(problem)
+        else:
+            result.trip_id = trip.id
     return result
 
 
 @router.post("/routing/route", response_model=RouteResponse, deprecated=True)
-async def legacy_route(body: RouteRequest, engine: RoutingEngine = Depends(get_engine)):
+async def legacy_route(body: RouteRequest, deadline: float = Depends(request_deadline),
+                       engine: RoutingEngine = Depends(get_engine)):
     """V1 route endpoint kept for older clients; served by the V2 engine."""
 
-    v2 = await engine.plan(
+    v2 = await _plan_within(
+        engine,
         RouteRequestV2(
             origin={"lat": body.origin.lat, "lon": body.origin.lon},
             destination={"lat": body.destination.lat, "lon": body.destination.lon},
             vehicle=body.vehicle,
             max_routes=5 if body.alternatives else 1,
             include_steps=body.steps,
-        )
+        ),
+        deadline,
     )
     routes = []
     for r in v2.routes:

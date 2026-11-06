@@ -33,8 +33,10 @@ Synthetic test fixtures are never used as evidence here.
 | Koramangala → Hebbal | 15.3 km | pass [test] |
 
 * Candidates: OSRM's native alternatives gave 0–2 per trip; the engine considered
-  10–13 candidates per request and returned up to 5 routes with pairwise geometric
-  similarity < 0.85 [test, live].
+  10–13 candidates per request and returned up to 5 routes [test, live]. That V2
+  measurement used the original, looser duplicate rule; since November 2026 a route is a near-duplicate when more than 70 % of its length is shared
+  with a kept route, and the audit trips are re-checked in
+  `tests/test_routing_trips_live.py` (see ROUTING.md, "Candidate generation").
 * Mode realism (Indiranagar → Yeshwanthpur, free-flow): car 51 km/h, bicycle 14.1 km/h,
   walk 5.0 km/h [live].
 * Avoid tolls: Electronic City → Kengeri via NICE Road 27.47 km / 22.7 min;

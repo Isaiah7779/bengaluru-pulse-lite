@@ -4,10 +4,22 @@ Pipeline for one request:
 
 1. Resolve the vehicle to the OSRM server built for that mode (no silent fallback).
 2. Reference route = OSRM's primary route (free-flow fastest for the mode).
-3. Candidates = OSRM native alternatives + corridor routes through lateral
-   waypoints (requested in parallel), snapped by OSRM to real roads.
-4. Filter impractical candidates (excessive detour, U-turn spurs) and remove
-   geometric duplicates (symmetric overlap similarity).
+3. Candidates = OSRM native alternatives + routes through via-points (requested
+   in parallel, snapped by OSRM to real roads): wide lateral corridors,
+   straight-line points that surface shorter-distance paths, and detours beside
+   the reference. Via-routes that U-turn in a dead end are re-requested through
+   the point where they left the road (a budgeted number per request).
+   All OSRM calls share one planning deadline (route_plan_deadline_s); unfinished
+   ones are cancelled and the routes found so far are used.
+4. Access: routes through private/destination-only roads mid-trip are removed,
+   checked against OSM access data from the extract (routing/access.py) and, where
+   the server reports it, OSRM's "restricted" class. Motorcycles: routes on ways
+   tagged motorcycle=no (not modelled by the car graph) are removed; if all are,
+   bypass routes are searched, else refused.
+   Selection: drop impractical detours and U-turn spurs, keep the
+   shortest-distance route beside the reference, then distinct routes
+   fastest-first; near-duplicates (more than 70% shared length by default) are
+   dropped and counted in `selection`.
 5. Traffic timing (car / motorcycle): TomTom times each candidate's own geometry
    (supportingPoints) for the requested departure. Results whose length differs
    from OSRM by more than 8% are rejected as mismatched reconstructions.
@@ -31,7 +43,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from core.errors import AppError, UpstreamUnavailable
 from core.settings import Settings
@@ -39,9 +51,19 @@ from db.models import Incident, TrafficObservation, TrafficSegment
 from db.session import session_scope
 from providers.tomtom import ProviderError, ProviderUnavailable, RouteTiming, TomTomProvider
 from routing import scoring
-from routing.classification import classify
-from routing.geometry import PointIndex, backtrack_length_m, haversine_m, resample, route_similarity
+from routing.classification import DISTANCE_ABS_M, DISTANCE_REL, classify
+from routing.geometry import (
+    PointIndex,
+    backtrack_length_m,
+    haversine_m,
+    line_length_m,
+    overlap_fraction,
+    resample,
+    spur_entry_points,
+)
 from routing.osrm_client import OSRMClient, OSRMError, OSRMNoRoute, extract_route_steps
+from routing.access import access_restrictions
+from routing.restrictions import bypass_waypoints, motorcycle_restrictions
 from routing.route_profiles import VehicleProfile, avoid_options, get_profile, get_vehicle_metadata, server_url
 from routing.schemas import (
     DataSourceStatus,
@@ -50,6 +72,7 @@ from routing.schemas import (
     RoutePreference,
     RouteRequestV2,
     RouteResponseV2,
+    RouteSelection,
     RouteSegmentEvidence,
     RouteStep,
     TrafficTiming,
@@ -62,7 +85,6 @@ logger = logging.getLogger(__name__)
 LENGTH_MATCH_TOLERANCE = 0.08
 FUTURE_THRESHOLD = timedelta(minutes=15)
 MAX_DEPART_AHEAD = timedelta(days=7)
-DUPLICATE_SIMILARITY = 0.85
 MAX_BACKTRACK_M = 120.0
 INCIDENT_POINT_RADIUS_M = 25.0  # point incidents must sit on the route
 INCIDENT_LINE_RADIUS_M = 20.0  # line incidents must run along the route...
@@ -78,6 +100,29 @@ _TIMING_CACHE: Dict[str, Tuple[float, RouteTiming]] = {}
 _TIMING_TTL_S = 300.0
 
 
+VIA_KINDS = {"corridor", "direct", "detour", "bypass"}  # routes forced through via-points
+WEATHER_CAP_S = 5.0
+# Share of the request deadline kept free after the OSRM phase for traffic timing,
+# database evidence and weather (they run concurrently), and a final margin for
+# ranking and building the response.
+POST_RESERVE_S = 5.0
+POST_RESERVE_FRACTION = 0.25
+ASSEMBLY_MARGIN_S = 0.5
+
+
+def _limit_statements(session, seconds: Optional[float]) -> None:
+    """Bound every query in this transaction on PostgreSQL (abandoned threads then stop soon)."""
+
+    if seconds is None:
+        return
+    try:
+        if session.get_bind().dialect.name == "postgresql":
+            session.execute(text(f"SET LOCAL statement_timeout = {int(max(seconds, 0.5) * 1000)}"))
+    except Exception:  # pragma: no cover - never block evidence on this
+        logger.debug("statement_timeout not applied", exc_info=True)
+RESTRICTED_MIN_M = 50.0
+
+
 @dataclass
 class Candidate:
     raw: Dict[str, Any]
@@ -89,10 +134,111 @@ class Candidate:
     traffic_note: Optional[str] = None
     incidents: List[RouteIncident] = field(default_factory=list)
     segments: List[RouteSegmentEvidence] = field(default_factory=list)
+    is_reference: bool = False
+    restricted_m: float = 0.0  # length on ways closed to this mode (motorcycle=no)
+    private_m: float = 0.0  # mid-trip length on private / destination-only roads
+    shared_max: Optional[float] = None  # largest share of its length on another returned route
 
-    @property
-    def is_reference(self) -> bool:
-        return self.origin_kind == "osrm_primary"
+
+def restricted_through_m(raw: Dict[str, Any]) -> float:
+    """Length of a route on access-restricted roads other than at the trip's start or end.
+
+    car.lua tags private/destination-only ways with the class "restricted" and
+    lets a route use them only to begin or end a leg. A via-point snapped inside
+    a gated campus or layout therefore pulls the whole route through it; such
+    stretches in the middle of the trip are counted here (trip-end ones are the
+    user's own origin or destination and are allowed).
+    """
+
+    steps = [s for leg in raw.get("legs") or [] for s in (leg.get("steps") or [])]
+    flags = [any("restricted" in (i.get("classes") or []) for i in (s.get("intersections") or [])) for s in steps]
+    start = 0
+    while start < len(flags) and flags[start]:
+        start += 1
+    end = len(flags)
+    while end > start and flags[end - 1]:
+        end -= 1
+    return sum(float(s.get("distance") or 0) for s, f in zip(steps[start:end], flags[start:end]) if f)
+
+
+def _reports_classes(raw: Dict[str, Any]) -> bool:
+    """Whether the server returned OSRM road classes (the public FOSSGIS server does not)."""
+
+    return any(
+        "classes" in i
+        for leg in raw.get("legs") or []
+        for s in (leg.get("steps") or [])
+        for i in (s.get("intersections") or [])
+    )
+
+
+def _significantly_shorter(a: float, b: float) -> bool:
+    """`a` is shorter than `b` by more than the classification noise threshold."""
+
+    return b - a > max(DISTANCE_ABS_M, DISTANCE_REL * b)
+
+
+def shared_fraction(a: Sequence[Sequence[float]], b: Sequence[Sequence[float]]) -> float:
+    """Share of either route lying on the other (the larger of the two directions)."""
+
+    return max(overlap_fraction(a, b), overlap_fraction(b, a))
+
+
+def direct_waypoints(o_lat: float, o_lon: float, d_lat: float, d_lon: float) -> List[List[Tuple[float, float]]]:
+    """Via-points on the straight line, which pull OSRM towards shorter-distance paths.
+
+    OSRM snaps each to the nearest car-accessible road, often a residential or
+    connecting street, so these surface distance-optimal candidates that a
+    time-optimised search never returns.
+    """
+
+    if haversine_m((o_lon, o_lat), (d_lon, d_lat)) < 1500:
+        return []
+
+    def at(f: float) -> Tuple[float, float]:
+        return (o_lat + (d_lat - o_lat) * f, o_lon + (d_lon - o_lon) * f)
+
+    return [[at(0.5)], [at(1 / 3), at(2 / 3)], [at(0.25), at(0.5), at(0.75)]]
+
+
+def detour_waypoints(reference: Sequence[Sequence[float]], span_m: float) -> List[List[Tuple[float, float]]]:
+    """Via-points beside the middle of the reference route (onto parallel streets)."""
+
+    if span_m < 1500 or len(reference) < 3:
+        return []
+    samples = resample(reference, max(25.0, line_length_m(reference) / 100))
+    if len(samples) < 5:
+        return []
+    offset = min(max(0.08 * span_m, 400.0), 2500.0)
+
+    def beside(fraction: float, side: int) -> Tuple[float, float]:
+        k = min(len(samples) - 2, max(1, int(fraction * (len(samples) - 1))))
+        (lon1, lat1, _), (lon, lat, _), (lon2, lat2, _) = samples[k - 1], samples[k], samples[k + 1]
+        m_lat = 111_320.0
+        m_lon = 111_320.0 * math.cos(math.radians(lat))
+        dx, dy = (lon2 - lon1) * m_lon, (lat2 - lat1) * m_lat
+        length = math.hypot(dx, dy) or 1.0
+        px, py = -dy / length, dx / length
+        return (lat + side * py * offset / m_lat, lon + side * px * offset / m_lon)
+
+    return [[beside(0.5, 1)], [beside(0.5, -1)], [beside(0.3, 1), beside(0.7, 1)], [beside(0.3, -1), beside(0.7, -1)]]
+
+
+def extra_waypoints(o: Tuple[float, float], d: Tuple[float, float], reference: Sequence[Sequence[float]]) -> List[Tuple[List[Tuple[float, float]], str]]:
+    """Distance-seeking and detour via-points, interleaved so a small budget gets both."""
+
+    span = haversine_m((o[1], o[0]), (d[1], d[0]))
+    direct = [(v, "direct") for v in direct_waypoints(o[0], o[1], d[0], d[1])]
+    detour = [(v, "detour") for v in detour_waypoints(reference, span)]
+    out: List[Tuple[List[Tuple[float, float]], str]] = []
+    for i in range(max(len(direct), len(detour))):
+        if i < len(direct):
+            out.append(direct[i])
+        if 2 * i < len(detour):
+            out.append(detour[2 * i])
+        if 2 * i + 1 < len(detour):
+            out.append(detour[2 * i + 1])
+    return out
 
 
 def _aware(ts: Optional[datetime]) -> Optional[datetime]:
@@ -221,7 +367,9 @@ class RoutingEngine:
         return self._clients[profile.osrm_profile]
 
     # ------------------------------------------------------------------
-    async def plan(self, req: RouteRequestV2) -> RouteResponseV2:
+    async def plan(self, req: RouteRequestV2, deadline_at: Optional[float] = None) -> RouteResponseV2:
+        """Plan routes. `deadline_at` (time.monotonic()) lets the API start the clock at request arrival."""
+
         profile = get_profile(req.vehicle)
         now = datetime.now(timezone.utc)
         depart_at = _aware(req.depart_at) or now
@@ -249,8 +397,27 @@ class RoutingEngine:
         # 1-2. reference + native alternatives --------------------------------
         o = (req.origin.lat, req.origin.lon)
         d = (req.destination.lat, req.destination.lon)
+        # One request deadline bounds everything below. OSRM calls (primary, via-routes,
+        # spur repairs, motorcycle bypass) must finish POST_RESERVE_S before it, so that
+        # traffic timing, database evidence and weather still fit; those then share the rest.
+        budget_s = self.settings.route_plan_deadline_s
+        request_deadline = deadline_at if deadline_at is not None else time.monotonic() + budget_s
+        deadline = request_deadline - min(POST_RESERVE_S, POST_RESERVE_FRACTION * budget_s)
+
+        def remaining() -> float:
+            return deadline - time.monotonic()
+
         try:
-            primary = await client.route_points([o, d], profile=profile.osrm_profile, alternatives=3, exclude=avoid)
+            primary = await asyncio.wait_for(
+                client.route_points([o, d], profile=profile.osrm_profile, alternatives=3, exclude=avoid),
+                timeout=max(0.05, remaining()),
+            )
+        except asyncio.TimeoutError as exc:
+            raise UpstreamUnavailable(
+                f"The routing engine did not return a route within the {budget_s:.0f} s planning limit. "
+                "This is usually temporary; please try again.",
+                code="routing_deadline_exceeded",
+            ) from exc
         except OSRMNoRoute as exc:
             raise AppError(
                 f"No {profile.vehicle} route found between these points ({exc}). "
@@ -280,46 +447,176 @@ class RoutingEngine:
         candidates: List[Candidate] = []
         for i, raw in enumerate(primary["routes"]):
             candidates.append(self._candidate(raw, "osrm_primary" if i == 0 else "osrm_alternative"))
-        reference = candidates[0]
+        osrm_primary = candidates[0]
 
-        # 3. corridor candidates in parallel ----------------------------------
-        corridors = corridor_waypoints(o[0], o[1], d[0], d[1])[: max(0, self.settings.osrm_corridor_max)]
+        # 3. via-point candidates in parallel ------------------------------------
+        # corridors: wide lateral detours; direct: straight-line points (shorter
+        # distance, often minor streets); detour: beside the reference's middle.
         semaphore = asyncio.Semaphore(max(1, self.settings.osrm_max_concurrency))
+        osrm_requests = 1
+        timed_out = 0
 
-        async def fetch(via):
+        async def fetch(via, kind, exclude=avoid):
             async with semaphore:
                 try:
-                    payload = await client.route_points([o, *via, d], profile=profile.osrm_profile, exclude=avoid)
-                    return payload["routes"][0]
+                    payload = await client.route_points([o, *via, d], profile=profile.osrm_profile, exclude=exclude)
+                    return self._candidate(payload["routes"][0], kind)
                 except OSRMError:
                     return None
 
-        for raw in await asyncio.gather(*(fetch(c) for c in corridors)):
-            if raw:
-                candidates.append(self._candidate(raw, "corridor"))
+        async def within(coros) -> List[Any]:
+            """Run requests until the deadline; cancel the rest and keep what finished."""
+
+            nonlocal timed_out
+            tasks = [asyncio.ensure_future(c) for c in coros]
+            if not tasks:
+                return []
+            done, pending = await asyncio.wait(tasks, timeout=max(0.0, remaining()))
+            for t in pending:
+                t.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+                timed_out += len(pending)
+            out = []
+            for t in tasks:
+                if t in done and not t.cancelled() and t.exception() is None and t.result():
+                    out.append(t.result())
+            return out
+
+        jobs = [(c, "corridor") for c in corridor_waypoints(o[0], o[1], d[0], d[1])[: max(0, self.settings.osrm_corridor_max)]]
+        jobs += extra_waypoints(o, d, osrm_primary.coords)[: max(0, self.settings.osrm_extra_candidates_max)]
+        osrm_requests += len(jobs)
+        vias = await within(fetch(v, k) for v, k in jobs)
+        # Re-route spurred via-routes through the point where they left the road
+        # (shortest first, so distance-saving candidates are repaired before others).
+        spurred = sorted((c for c in vias if backtrack_length_m(c.coords) > MAX_BACKTRACK_M), key=lambda c: c.distance_m)
+        repairs = []
+        for c in spurred[: max(0, self.settings.osrm_spur_repair_max)]:
+            entries = spur_entry_points(c.coords)[:3]
+            if entries:
+                repairs.append(([(lat, lon) for lon, lat in entries], c.origin_kind))
+        osrm_requests += len(repairs)
+        candidates.extend(vias)
+        candidates.extend(await within(fetch(v, k) for v, k in repairs))
+
+        # 4. access and mode restrictions the graph or server does not report ------
+        rejected: Dict[str, int] = {}
+        access = access_restrictions()
+        classes_seen = any(_reports_classes(c.raw) for c in candidates)
+
+        def private_m(c: Candidate) -> float:
+            return max(restricted_through_m(c.raw), access.through_m(c.coords) if access else 0.0)
+
+        for c in candidates:
+            c.private_m = private_m(c)
+        legal = [c for c in candidates if c.private_m <= 0]
+        if len(legal) < len(candidates):
+            rejected["restricted_access"] = len(candidates) - len(legal)
+        sources.append(self._access_source(access, classes_seen))
+        if access is None and not classes_seen:
+            warnings.append(
+                "Private or destination-only roads could not be verified for this route: the routing server reports no "
+                "road access classes and the OSM access data file is missing."
+            )
+
+        names = ""
+        if profile.vehicle == "motorcycle":
+            restricted = motorcycle_restrictions()
+            if restricted is None:
+                sources.append(DataSourceStatus(name="motorcycle_restrictions", status="unavailable",
+                                                detail="restriction data file missing; motorcycle=no roads not checked"))
+                warnings.append("Roads closed to motorcycles could not be checked for this route.")
+            else:
+                for c in legal:
+                    c.restricted_m = restricted.used_length_m(c.coords)
+                moto_ok = [c for c in legal if c.restricted_m < RESTRICTED_MIN_M]
+                if not moto_ok:
+                    extra, used = await self._motorcycle_bypass(client, profile, o, d, avoid, osrm_primary, restricted,
+                                                                fetch, within)
+                    osrm_requests += used
+                    for c in extra:
+                        c.private_m = private_m(c)
+                        c.restricted_m = restricted.used_length_m(c.coords)
+                    candidates.extend(extra)
+                    bypass_private = sum(1 for c in extra if c.private_m > 0)
+                    if bypass_private:
+                        rejected["restricted_access"] = rejected.get("restricted_access", 0) + bypass_private
+                    legal.extend(c for c in extra if c.private_m <= 0)
+                    moto_ok = [c for c in legal if c.restricted_m < RESTRICTED_MIN_M]
+                dropped = len(legal) - len(moto_ok)
+                if dropped:
+                    rejected["motorcycle_restricted"] = dropped
+                names = ", ".join(restricted.names()) or "roads tagged motorcycle=no"
+                sources.append(DataSourceStatus(
+                    name="motorcycle_restrictions", status="ok",
+                    detail=f"{restricted.count} OSM ways tagged motorcycle=no ({names}); {restricted.source}",
+                ))
+                if not moto_ok and legal:
+                    self._raise_if_search_cut_short(timed_out, budget_s)
+                    raise AppError(
+                        f"No motorcycle route found that avoids roads closed to motorcycles ({names}). "
+                        "Every route the routing engine produced uses them; try a nearby start or end point.",
+                        code="no_legal_route",
+                        status_code=422,
+                    )
+                legal = moto_ok
+        if timed_out:
+            rejected["timed_out"] = timed_out
+            warnings.append(
+                f"{timed_out} alternative-route request(s) were stopped at the {budget_s:.0f} s planning limit; "
+                "the routes shown are the ones found before it."
+            )
+        if not legal:
+            self._raise_if_search_cut_short(timed_out, budget_s)
+            raise AppError(
+                f"No {profile.vehicle} route found that avoids private or destination-only roads mid-trip "
+                "(OpenStreetMap access tags). Try a start or end point on a public road.",
+                code="no_legal_route",
+                status_code=422,
+            )
+
+        reference = osrm_primary
+        if osrm_primary not in legal:
+            reference = min(legal, key=lambda c: c.duration_s)
+            if osrm_primary.restricted_m >= RESTRICTED_MIN_M:
+                warnings.append(
+                    f"The routing engine's default route uses {osrm_primary.restricted_m / 1000:.1f} km of roads closed to "
+                    f"motorcycles ({names}); routes on them were removed and the fastest remaining route is the reference."
+                )
+            else:
+                warnings.append(
+                    f"The routing engine's default route uses {osrm_primary.private_m:.0f} m of private or destination-only "
+                    "road mid-trip; it was removed and the fastest remaining route is the reference."
+                )
+        reference.is_reference = True
         considered = len(candidates)
+        candidates = legal
 
-        # 4. filter + dedup -----------------------------------------------------
-        kept = self._filter_and_dedup(candidates, reference, req.max_routes)
+        # 5. choose distinct, practical routes ------------------------------------
+        kept = self._select(candidates, reference, req.max_routes, rejected)
+        selection = self._selection_report(kept, considered, osrm_requests, rejected)
+        if selection.note:
+            warnings.append(selection.note)
 
-        # 5. traffic timing -----------------------------------------------------
-        traffic_status = await self._apply_traffic(kept, profile, depart_at if future else None)
+        # 5-6. traffic timing, database evidence and weather, concurrently -----------
+        # Each runs in a worker thread (TomTom's quota guard, the weather cache and the
+        # evidence queries make blocking database calls that asyncio cannot interrupt) on
+        # copies of the routes, and is abandoned at the request deadline. Only results that
+        # arrived in time are copied back, so a stalled call can never corrupt the response.
+        post_timeout = max(0.0, request_deadline - time.monotonic() - ASSEMBLY_MARGIN_S)
+        traffic_status, evidence_statuses, weather = await asyncio.gather(
+            self._bounded_traffic(kept, profile, depart_at if future else None, post_timeout, budget_s),
+            self._bounded_evidence(kept, profile, depart_at, post_timeout, budget_s),
+            self._bounded_weather(o, depart_at, min(WEATHER_CAP_S, post_timeout)),
+        )
         sources.append(traffic_status)
-
-        # 6. evidence -----------------------------------------------------------
-        if self.use_database:
-            try:
-                inc_status = self._attach_incidents(kept, motor=profile.tomtom_travel_mode is not None)
-                sources.append(inc_status)
-                sources.append(self._attach_segments(kept, depart_at))
-            except Exception:
-                logger.exception("Evidence lookup failed")
-                sources.append(DataSourceStatus(name="observations_db", status="unavailable", detail="database error"))
-        weather = None
-        try:
-            weather = await self.weather.at(o[0], o[1], depart_at)
-        except Exception:
-            logger.exception("Weather lookup failed")
+        sources.extend(evidence_statuses)
+        stopped = [s.name for s in [traffic_status, *evidence_statuses] if "request time limit" in (s.detail or "")]
+        if stopped:
+            warnings.append(
+                f"{', '.join(n.replace('_', ' ') for n in stopped)} did not finish within the {budget_s:.0f} s request "
+                "limit; the routes are shown without that information."
+            )
         sources.append(
             DataSourceStatus(
                 name="weather",
@@ -340,7 +637,8 @@ class RoutingEngine:
 
         # 7. rank, classify, explain ----------------------------------------------
         return self._assemble(
-            req, profile, kept, reference, depart_at, future, weather, sources, warnings, considered
+            req, profile, kept, reference, depart_at, future, weather, sources, warnings, considered,
+            selection=selection, reference_is_primary=reference is osrm_primary,
         )
 
     # ------------------------------------------------------------------
@@ -354,26 +652,209 @@ class RoutingEngine:
             duration_s=float(raw.get("duration") or 0),
         )
 
-    def _filter_and_dedup(self, candidates: List[Candidate], reference: Candidate, max_routes: int) -> List[Candidate]:
+    def _select(self, candidates: List[Candidate], reference: Candidate, max_routes: int,
+                rejected: Dict[str, int]) -> List[Candidate]:
+        """Keep the reference, the shortest practical route, then distinct routes fastest-first.
+
+        A candidate is a near-duplicate when more than `route_max_shared_fraction`
+        of its length (or of a kept route's length) lies on a kept route, or when
+        its own part is shorter than `route_min_unique_m`. The shortest-distance
+        candidate is kept even when it is a variant of a kept route, provided it
+        is meaningfully shorter than every kept route: distance-optimal and
+        time-optimal routes are shown side by side, and its overlap is reported.
+        """
+
+        def reject(reason: str) -> None:
+            rejected[reason] = rejected.get(reason, 0) + 1
+
         ref_d, ref_t = reference.distance_m, reference.duration_s
         limit = min(max_routes, self.settings.max_route_candidates)
-        kept: List[Candidate] = [reference]
-        others = sorted((c for c in candidates if c is not reference), key=lambda c: c.duration_s)
-        for cand in others:
-            if len(kept) >= limit:
-                break
+        max_shared = self.settings.route_max_shared_fraction
+        practical: List[Candidate] = []
+        for cand in candidates:
+            if cand is reference:
+                continue
             if cand.distance_m <= 0 or cand.duration_s <= 0 or len(cand.coords) < 2:
+                reject("invalid")
+            elif cand.distance_m > 1.5 * ref_d + 1000 or cand.duration_s > 1.5 * ref_t + 180:
+                reject("impractical_detour")
+            elif cand.origin_kind in VIA_KINDS and backtrack_length_m(cand.coords) > MAX_BACKTRACK_M:
+                reject("u_turn_spur")
+            else:
+                practical.append(cand)
+
+        kept: List[Candidate] = [reference]
+        if practical and limit > 1:
+            shortest = min(practical, key=lambda c: c.distance_m)
+            if _significantly_shorter(shortest.distance_m, min(k.distance_m for k in kept)):
+                kept.append(shortest)
+        for cand in sorted(practical, key=lambda c: c.duration_s):
+            if cand in kept:
                 continue
-            if cand.distance_m > 1.5 * ref_d + 1000 or cand.duration_s > 1.5 * ref_t + 180:
-                continue  # impractical detour
-            if cand.origin_kind == "corridor" and backtrack_length_m(cand.coords) > MAX_BACKTRACK_M:
-                continue  # via-point produced a U-turn spur
-            if any(route_similarity(cand.coords, k.coords) >= DUPLICATE_SIMILARITY for k in kept):
-                continue
-            kept.append(cand)
+            on_kept = max(overlap_fraction(cand.coords, k.coords) for k in kept)
+            covers_kept = max(overlap_fraction(k.coords, cand.coords) for k in kept)
+            if max(on_kept, covers_kept) > max_shared or cand.distance_m * (1 - on_kept) < self.settings.route_min_unique_m:
+                reject("near_duplicate")
+            elif len(kept) >= limit:
+                reject("over_route_limit")
+            else:
+                kept.append(cand)
+
+        for c in kept:
+            others = [k for k in kept if k is not c]
+            c.shared_max = max((overlap_fraction(c.coords, k.coords) for k in others), default=0.0)
         return kept
 
+    def _selection_report(self, kept: List[Candidate], considered: int, osrm_requests: int,
+                          rejected: Dict[str, int]) -> RouteSelection:
+        note = None
+        if len(kept) == 1:
+            reasons = {
+                "near_duplicate": "near-duplicates of it",
+                "impractical_detour": "impractical detours (over 1.5x its distance or time)",
+                "u_turn_spur": "U-turn spurs",
+                "motorcycle_restricted": "on roads closed to motorcycles",
+                "restricted_access": "through private or destination-only roads",
+                "timed_out": "not returned before the planning time limit",
+                "invalid": "invalid",
+            }
+            parts = [f"{n} {reasons.get(k, k)}" for k, n in rejected.items() if n]
+            note = (
+                f"Only one distinct, practical route was found. The routing engine produced {considered} candidate(s)"
+                + (f": {', '.join(parts)}." if parts else ".")
+                + " No alternative is shown rather than a near-copy of this route."
+            )
+        return RouteSelection(
+            osrm_requests=osrm_requests,
+            candidates_considered=considered,
+            returned=len(kept),
+            max_shared_pct=round(100 * self.settings.route_max_shared_fraction, 1),
+            min_unique_m=self.settings.route_min_unique_m,
+            rejected=dict(rejected),
+            note=note,
+        )
+
+    async def _motorcycle_bypass(self, client, profile, o, d, avoid, primary: Candidate, restricted, fetch,
+                                 within) -> Tuple[List[Candidate], int]:
+        """Look for routes off motorcycle-restricted roads when every candidate uses them.
+
+        Runs inside the request's planning deadline (`within`), like every other via-request.
+        """
+
+        async def without_motorways():
+            try:
+                payload = await client.route_points([o, d], profile=profile.osrm_profile, alternatives=3,
+                                                    exclude=[*avoid, "motorway"])
+                return [self._candidate(raw, "osrm_exclude") for raw in payload["routes"]]
+            except OSRMError:
+                return None
+
+        jobs = []
+        if "motorway" in avoid_options(profile, self.settings) and "motorway" not in avoid:
+            jobs.append(without_motorways())
+        stretches = sorted(restricted.stretches(primary.coords), key=lambda s: s[1] - s[0], reverse=True)
+        if stretches:
+            jobs.extend(fetch(v, "bypass") for v in bypass_waypoints(primary.coords, stretches[0]))
+        used = len(jobs)
+        extra: List[Candidate] = []
+        for result in await within(jobs):
+            extra.extend(result if isinstance(result, list) else [result])
+        return extra, used
+
+    @staticmethod
+    def _raise_if_search_cut_short(timed_out: int, budget_s: float) -> None:
+        """No legal route, but the search was stopped early: say so and ask for a retry."""
+
+        if timed_out:
+            raise UpstreamUnavailable(
+                f"No legal route was found before the {budget_s:.0f} s planning limit ({timed_out} alternative "
+                "request(s) unfinished). This is usually temporary; please try again.",
+                code="routing_deadline_exceeded",
+            )
+
+    @staticmethod
+    def _access_source(access, classes_seen: bool) -> DataSourceStatus:
+        classes = ("OSRM road classes returned and also checked" if classes_seen
+                   else "this routing server returns no road classes, so only the OSM extract is checked")
+        if access is not None:
+            return DataSourceStatus(name="private_road_check", status="ok", detail=f"{access.description}; {classes}")
+        if classes_seen:
+            return DataSourceStatus(name="private_road_check", status="degraded",
+                                    detail="OSM access data file missing; only OSRM road classes checked")
+        return DataSourceStatus(name="private_road_check", status="unavailable",
+                                detail="no OSM access data and no OSRM road classes; private roads not verified")
+
     # ------------------------------------------------------------------
+    @staticmethod
+    def _shadow(c: Candidate) -> Candidate:
+        """Copy a route for work in another thread (results are copied back only if they arrive)."""
+
+        return Candidate(raw=c.raw, origin_kind=c.origin_kind, coords=c.coords, distance_m=c.distance_m,
+                         duration_s=c.duration_s, is_reference=c.is_reference)
+
+    async def _bounded_traffic(self, kept: List[Candidate], profile: VehicleProfile, future_depart: Optional[datetime],
+                               timeout: float, budget_s: float) -> DataSourceStatus:
+        if profile.tomtom_travel_mode is None or not self.tomtom.configured:
+            return await self._apply_traffic(kept, profile, future_depart)  # no I/O on these paths
+        shadows = [self._shadow(c) for c in kept]
+        status: Optional[DataSourceStatus] = None
+        try:
+            status = await asyncio.wait_for(
+                asyncio.to_thread(lambda: asyncio.run(self._apply_traffic(shadows, profile, future_depart))), timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Traffic timing stopped at the request deadline")
+        except Exception:
+            logger.exception("Traffic timing failed")
+            status = DataSourceStatus(name="tomtom_traffic", status="unavailable", detail="internal error")
+        # Keep every timing that arrived in time (each one is complete when assigned).
+        for c, s in zip(kept, shadows):
+            c.traffic, c.traffic_note = s.traffic, s.traffic_note
+        if status is None:
+            timed = sum(1 for c in kept if c.traffic)
+            for c in kept:
+                if c.traffic is None:
+                    c.traffic_note = "Traffic timing did not finish within the request time limit; free-flow estimate."
+            status = DataSourceStatus(
+                name="tomtom_traffic", status="degraded" if timed else "unavailable",
+                detail=f"stopped at the {budget_s:.0f} s request time limit ({timed}/{len(kept)} routes timed)",
+            )
+        return status
+
+    async def _bounded_evidence(self, kept: List[Candidate], profile: VehicleProfile, depart_at: datetime,
+                                timeout: float, budget_s: float) -> List[DataSourceStatus]:
+        if not self.use_database:
+            return []
+        shadows = [self._shadow(c) for c in kept]
+        motor = profile.tomtom_travel_mode is not None
+
+        def work():
+            return (self._attach_incidents(shadows, motor=motor, timeout_s=timeout),
+                    self._attach_segments(shadows, depart_at, timeout_s=timeout))
+
+        try:
+            statuses = list(await asyncio.wait_for(asyncio.to_thread(work), timeout=timeout))
+        except asyncio.TimeoutError:
+            logger.warning("Evidence lookups stopped at the request deadline")
+            return [DataSourceStatus(name="observations_db", status="unavailable",
+                                     detail=f"incident and monitored-point lookups stopped at the {budget_s:.0f} s request time limit")]
+        except Exception:
+            logger.exception("Evidence lookup failed")
+            return [DataSourceStatus(name="observations_db", status="unavailable", detail="database error")]
+        for c, s in zip(kept, shadows):
+            c.incidents, c.segments = s.incidents, s.segments
+        return statuses
+
+    async def _bounded_weather(self, o: Tuple[float, float], depart_at: datetime, timeout: float) -> Optional[Dict[str, Any]]:
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(lambda: asyncio.run(self.weather.at(o[0], o[1], depart_at))),
+                                          timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning("Weather lookup stopped after %.1f s", timeout)
+        except Exception:
+            logger.exception("Weather lookup failed")
+        return None
+
     async def _apply_traffic(self, kept: List[Candidate], profile: VehicleProfile, future_depart: Optional[datetime]) -> DataSourceStatus:
         if profile.tomtom_travel_mode is None:
             for c in kept:
@@ -459,9 +940,10 @@ class RoutingEngine:
         lats = [p[1] for p in samples]
         return PointIndex(samples, cell_m=60.0), (min(lons), min(lats), max(lons), max(lats))
 
-    def _attach_incidents(self, kept: List[Candidate], motor: bool = True) -> DataSourceStatus:
+    def _attach_incidents(self, kept: List[Candidate], motor: bool = True, timeout_s: Optional[float] = None) -> DataSourceStatus:
         margin = 0.002
         with session_scope() as session:
+            _limit_statements(session, timeout_s)
             last_sweep = None
             for c in kept:
                 index, (min_lon, min_lat, max_lon, max_lat) = self._route_index(c)
@@ -492,9 +974,10 @@ class RoutingEngine:
             return DataSourceStatus(name="incidents", status="unavailable", detail="no incident data collected yet")
         return DataSourceStatus(name="incidents", status="ok", detail=f"{total_active} active incidents (TomTom sweep)", as_of=last_sweep)
 
-    def _attach_segments(self, kept: List[Candidate], depart_at: datetime) -> DataSourceStatus:
+    def _attach_segments(self, kept: List[Candidate], depart_at: datetime, timeout_s: Optional[float] = None) -> DataSourceStatus:
         now = datetime.now(timezone.utc)
         with session_scope() as session:
+            _limit_statements(session, timeout_s)
             segments = session.scalars(select(TrafficSegment).where(TrafficSegment.active.is_(True))).all()
             latest: Dict[int, TrafficObservation] = {}
             for seg in segments:
@@ -547,7 +1030,8 @@ class RoutingEngine:
         )
 
     # ------------------------------------------------------------------
-    def _assemble(self, req, profile, kept, reference, depart_at, future, weather, sources, warnings, considered) -> RouteResponseV2:
+    def _assemble(self, req, profile, kept, reference, depart_at, future, weather, sources, warnings, considered,
+                  selection: Optional[RouteSelection] = None, reference_is_primary: bool = True) -> RouteResponseV2:
         traffic_basis = reference.traffic is not None
         basis = reference.traffic.basis if traffic_basis else "free_flow"
 
@@ -602,6 +1086,9 @@ class RoutingEngine:
                 )
             )
         for opt, i in zip(options, order):
+            opt.shared_max_pct = round(100 * kept[i].shared_max, 1) if kept[i].shared_max is not None else None
+        self._label(options, considered)
+        for opt, i in zip(options, order):
             opt.explanation = scoring.explain(opt, kept[i], options, applied, basis)
         best = options[0]
         reference_option = next(o for o in options if o.is_reference)
@@ -622,6 +1109,9 @@ class RoutingEngine:
             reference_description=(
                 f"OSRM's default route for {profile.vehicle} ({profile.lua_profile}), fastest under free-flow "
                 "conditions; all shortcut/longcut labels are relative to it."
+                if reference_is_primary else
+                f"Fastest {profile.vehicle} route found that avoids roads closed to {profile.vehicle}s (OSRM's default "
+                "route uses them); all shortcut/longcut labels are relative to it."
             ),
             recommended_route_id=best.id,
             recommendation=scoring.recommendation_text(best, applied, basis, len(options)),
@@ -630,4 +1120,20 @@ class RoutingEngine:
             data_sources=sources,
             warnings=warnings,
             candidates_considered=considered,
+            selection=selection,
         )
+
+    @staticmethod
+    def _label(options: List[RouteOption], considered: int) -> None:
+        """Mark the fastest, shortest-distance and least-delay routes among those returned."""
+
+        if not options:
+            return
+        comparable = [o for o in options if o.comparable] or options
+        fastest = min(comparable, key=lambda o: o.eta_s)
+        shortest = min(options, key=lambda o: o.distance_m)
+        fastest.labels.append("fastest")
+        shortest.labels.append("shortest_distance")
+        timed = [o for o in options if o.traffic is not None]
+        if len(timed) >= 2:
+            min(timed, key=lambda o: o.traffic.traffic_delay_s).labels.append("least_traffic_delay")
