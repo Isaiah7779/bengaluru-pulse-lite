@@ -1,11 +1,11 @@
 {
- "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+ "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
  "documents": [
   {
    "source_type": "doc",
    "source_ref": "docs/ROUTING.md",
    "title": "Routing",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "087283ef6fd8c40b3cbb0c48d0c4e48acbaf62a4d9de0b1e060c7c2d050d50f5",
    "visibility": "user",
    "chunks": [
@@ -20,7 +20,7 @@
        "Road graphs and vehicle modes"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -34,7 +34,7 @@
        "Candidate generation"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -48,7 +48,7 @@
        "Traffic timing"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -62,7 +62,7 @@
        "Comparison basis and preferences"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -76,7 +76,7 @@
        "Shortcut / longcut classification (`routing/classification.py`)"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -90,7 +90,7 @@
        "Evidence attached to each route"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -104,7 +104,7 @@
        "Benchmarks (live OSRM, `tests/test_integration_live.py`)"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -118,7 +118,7 @@
        "Resilience"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -132,7 +132,7 @@
        "Known limitations"
       ],
       "source_ref": "docs/ROUTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -141,7 +141,7 @@
    "source_type": "doc",
    "source_ref": "docs/TRAFFIC.md",
    "title": "Traffic, weather and incident data",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "1e616e21b70ea676841ed6e0b795e84b40e3e00f173e2d188fd3b451008ab37d",
    "visibility": "user",
    "chunks": [
@@ -156,7 +156,7 @@
        "Sources"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -170,7 +170,7 @@
        "Quota budget (TomTom free tier: 2,500 non-tile requests/day, verified 2026-10-22)"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -184,7 +184,7 @@
        "Ingestion pipeline"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -198,7 +198,7 @@
        "Read APIs"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -212,7 +212,7 @@
        "Data collected so far (measured 2026-10-22 05:35 UTC)"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -226,7 +226,7 @@
        "Terms and attribution"
       ],
       "source_ref": "docs/TRAFFIC.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -235,7 +235,7 @@
    "source_type": "doc",
    "source_ref": "docs/ML_PIPELINE.md",
    "title": "Forecasting pipeline",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "dfa193e67d04ce3f11582e23fdec6a1a8b0df678f9e5b9c953da6d08702bb88f",
    "visibility": "user",
    "chunks": [
@@ -248,7 +248,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -262,7 +262,7 @@
        "Method"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -276,7 +276,7 @@
        "Track A — public daily dataset (research)"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -290,7 +290,7 @@
        "Track A — public daily dataset (research)"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -304,7 +304,7 @@
        "Track B — collected TomTom observations (operational)"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -318,7 +318,7 @@
        "Prospective evaluation (M1, running)"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -332,7 +332,7 @@
        "Graph neural networks"
       ],
       "source_ref": "docs/ML_PIPELINE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -341,7 +341,7 @@
    "source_type": "doc",
    "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
    "title": "Results and limitations",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "b83e7f374f743290ab50f078bef8d3a4adab8dbcece1a54fd41e47c10be4ae2c",
    "visibility": "user",
    "chunks": [
@@ -354,7 +354,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -368,7 +368,7 @@
        "1. What is completed versus validated"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -382,7 +382,7 @@
        "2. Routing"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -396,7 +396,7 @@
        "3. Data collected (own observations) [live]"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -411,7 +411,7 @@
        "4.1 Offline, public daily dataset [offline]"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -426,7 +426,7 @@
        "4.2 Own observations"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -440,7 +440,7 @@
        "5. Limitations"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -454,7 +454,7 @@
        "6. Next steps"
       ],
       "source_ref": "docs/RESULTS_AND_LIMITATIONS.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -463,7 +463,7 @@
    "source_type": "doc",
    "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
    "title": "Research milestone: validated short-horizon forecasting",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "826de9515fb2448951ead93a2cdf8cabcde4e73d4dbb8e5f32e5a062b5d8fa78",
    "visibility": "user",
    "chunks": [
@@ -476,7 +476,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -490,7 +490,7 @@
        "Question"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -504,7 +504,7 @@
        "Current state (inspected)"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -518,7 +518,7 @@
        "Definitions"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -532,7 +532,7 @@
        "Milestones"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -546,7 +546,7 @@
        "Next implementation steps (small, testable)"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -560,7 +560,7 @@
        "Threats to validity"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -574,7 +574,7 @@
        "What must not happen"
       ],
       "source_ref": "docs/RESEARCH_MILESTONE_FORECASTING.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -583,7 +583,7 @@
    "source_type": "doc",
    "source_ref": "docs/USER_GUIDE.md",
    "title": "User guide",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "24a89bc6c845f3f42ae370a5b6b5fd148b5475a7c264423691fe11c066d97ae2",
    "visibility": "user",
    "chunks": [
@@ -596,7 +596,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -610,7 +610,7 @@
        "1. Plan a route (sign-in required)"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -624,7 +624,7 @@
        "2. Read the results"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -638,7 +638,7 @@
        "3. Traffic page"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -652,7 +652,7 @@
        "4. Create an account and sign in"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -666,7 +666,7 @@
        "5. Administrators"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -680,7 +680,7 @@
        "6. On phones, tablets and other computers"
       ],
       "source_ref": "docs/USER_GUIDE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -689,7 +689,7 @@
    "source_type": "doc",
    "source_ref": "docs/SECURITY.md",
    "title": "Security",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "10bc39f8a4c5746f6e370f4661622c02cebd3e1575a0ff81d75c0cb5fcb9fb64",
    "visibility": "user",
    "chunks": [
@@ -704,7 +704,7 @@
        "Authentication"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -718,7 +718,7 @@
        "Authorization (enforced in the backend)"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -732,7 +732,7 @@
        "Secrets"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -746,7 +746,7 @@
        "Transport and headers"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -760,7 +760,7 @@
        "Input handling and abuse limits"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -774,7 +774,7 @@
        "Known gaps (not implemented)"
       ],
       "source_ref": "docs/SECURITY.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -783,7 +783,7 @@
    "source_type": "doc",
    "source_ref": "docs/DATABASE.md",
    "title": "Database",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "dc23fd2c051fd0b292b7e5e14634dd5e8dbbdb46fd1ae03b8066db567b950b2a",
    "visibility": "user",
    "chunks": [
@@ -796,7 +796,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -810,7 +810,7 @@
        "Tables"
       ],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -824,7 +824,7 @@
        "Spatial and time indexes"
       ],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -838,7 +838,7 @@
        "Retention and privacy (daily job, `traffic/maintenance.py`)"
       ],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -852,7 +852,7 @@
        "Persistence"
       ],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -866,7 +866,7 @@
        "Rebuilding the gazetteer"
       ],
       "source_ref": "docs/DATABASE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -875,7 +875,7 @@
    "source_type": "doc",
    "source_ref": "docs/ARCHITECTURE.md",
    "title": "Architecture",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "56090ef7c2128058dc0b63dc7330c765882fdc305e63d64b8c91f16dcb0ab837",
    "visibility": "user",
    "chunks": [
@@ -890,7 +890,7 @@
        "System overview"
       ],
       "source_ref": "docs/ARCHITECTURE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -904,7 +904,7 @@
        "Components"
       ],
       "source_ref": "docs/ARCHITECTURE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -918,7 +918,7 @@
        "Request lifecycle: `POST /v1/routes`"
       ],
       "source_ref": "docs/ARCHITECTURE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -932,7 +932,7 @@
        "Processes and deployment units"
       ],
       "source_ref": "docs/ARCHITECTURE.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -941,7 +941,7 @@
    "source_type": "doc",
    "source_ref": "docs/DEPLOY_FREE_TIER.md",
    "title": "Free-tier deployment: Render (API + database) and Vercel (web apps)",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "9baa591e8581699bceabad5f63fabb5c47676bd2961bef0654b3e7e9d4d54c65",
    "visibility": "user",
    "chunks": [
@@ -954,7 +954,7 @@
      "meta": {
       "headings": [],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -968,7 +968,7 @@
        "Free-tier limits you will notice"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -982,7 +982,7 @@
        "1. Push the code"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -996,7 +996,7 @@
        "2. Backend and database on Render"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -1011,7 +1011,7 @@
        "Create the first admin"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -1025,7 +1025,7 @@
        "3. Web apps on Vercel"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -1039,7 +1039,7 @@
        "4. Connect the two"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -1053,7 +1053,7 @@
        "5. Collector (optional, needs a TomTom key for traffic)"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -1067,7 +1067,7 @@
        "6. Checks before calling it deployed"
       ],
       "source_ref": "docs/DEPLOY_FREE_TIER.md",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -1076,7 +1076,7 @@
    "source_type": "eval_report",
    "source_ref": "backend/evaluation/v2/segment-speed-ratio.json",
    "title": "Evaluation report segment-speed-ratio",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "bc9a2d672e5fba63b370b83cc4c66ba3f658bd6f8936663a13cac0e89d63f3ca",
    "visibility": "user",
    "chunks": [
@@ -1091,7 +1091,7 @@
        "Summary"
       ],
       "source_ref": "backend/evaluation/v2/segment-speed-ratio.json",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
@@ -1100,7 +1100,7 @@
    "source_type": "eval_report",
    "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
    "title": "Evaluation report research-daily-congestion",
-   "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7",
+   "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2",
    "content_hash": "0645c4fea57c4ffdecd3e687219ef47128006d3e05a1a2814fdce535be3495c0",
    "visibility": "user",
    "chunks": [
@@ -1115,7 +1115,7 @@
        "Summary"
       ],
       "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -1129,7 +1129,7 @@
        "Horizon 1d"
       ],
       "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -1143,7 +1143,7 @@
        "Horizon 7d"
       ],
       "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     },
     {
@@ -1157,7 +1157,7 @@
        "Legacy V1 check"
       ],
       "source_ref": "backend/evaluation/v2/research-daily-congestion.json",
-      "commit_sha": "d62136e3d2c43ad3c0d5d15715295c51bc5bc1a7"
+      "commit_sha": "6055f9fccfa583343bb90d255935b6f75700c3b2"
      }
     }
    ]
